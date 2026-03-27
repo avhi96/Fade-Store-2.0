@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Orbitron:wght@400..900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg: #030610;
+  --bg2: #060d1f;
+  --surface: rgba(255,255,255,0.04);
+  --surface2: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(99,179,237,0.25);
+
+  --cyan: #63b3ed;
+  --violet: #9f7aea;
+  --pink: #ed64a6;
+  --gold: #f6c90e;
+  --green: #68d391;
+  --text: #e2e8f0;
+  --muted: #718096;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+/* glass effect */
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+}
+
+/* glow */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(99,179,237,0.4);
+}
+
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 22s linear infinite;
+}
