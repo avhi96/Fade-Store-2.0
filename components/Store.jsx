@@ -54,7 +54,7 @@ export default function Store() {
             key={t.id}
             onClick={() => setActive(t.id)}
             className={clsx(
-              "px-5 py-2 rounded-full text-[0.82rem] font-semibold uppercase tracking-[0.08em] border transition",
+              "px-5 py-2 rounded-full cursor-pointer text-[0.82rem] font-semibold uppercase tracking-[0.08em] border transition",
               active === t.id
                 ? "border-cyan-400 text-cyan-400 bg-cyan-400/10"
                 : "border-white/10 text-gray-500 hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-400/10"

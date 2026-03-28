@@ -39,7 +39,7 @@ export default function Contact() {
 
             <div className="grid md:grid-cols-2 gap-10">
 
-                {/* 🔥 LEFT SIDE */}
+                {/*  LEFT SIDE */}
                 <div className="flex flex-col gap-5">
 
                     {[
@@ -107,7 +107,7 @@ export default function Contact() {
 
                 </div>
 
-                {/* 🔥 RIGHT SIDE FORM */}
+                {/* RIGHT SIDE FORM */}
                 <div className="p-8 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl">
 
                     <h3
@@ -156,7 +156,7 @@ export default function Contact() {
                         />
 
                         {/* BUTTON */}
-                        <button className="mt-4 py-3 rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500 text-white font-bold tracking-[0.08em] uppercase shadow-[0_0_20px_rgba(59,130,246,0.4)] hover:-translate-y-[1px] hover:shadow-[0_4px_30px_rgba(59,130,246,0.6)] transition">
+                        <button className="mt-4 cursor-pointer py-3 rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500 text-white font-bold tracking-[0.08em] uppercase shadow-[0_0_20px_rgba(59,130,246,0.4)] hover:-translate-y-[1px] hover:shadow-[0_4px_30px_rgba(59,130,246,0.6)] transition">
                             Send Message →
                         </button>
 

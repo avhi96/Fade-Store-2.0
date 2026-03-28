@@ -1,5 +1,6 @@
 "use client"
 import { Crown, Medal } from "lucide-react"
+import Link from "next/link"
 
 export default function TopBuyers() {
 
@@ -97,9 +98,11 @@ export default function TopBuyers() {
 
       {/* BUTTON (IMPORTANT FIX) */}
       <div className="text-center mt-8">
-        <button className="px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase tracking-[0.06em] font-bold hover:border-cyan-400 hover:text-cyan-400 hover:bg-cyan-400/10 transition">
+        <Link href="/partners">
+        <button className="px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase tracking-[0.06em] font-bold hover:border-blue-400 hover:text-blue-400 hover:bg-blue-400/10 transition cursor-pointer">
           View All & Partners →
         </button>
+        </Link>
       </div>
 
     </section>

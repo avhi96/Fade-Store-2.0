@@ -66,7 +66,7 @@ export default function Updates() {
         <div className="w-[60px] h-[2px] mx-auto mt-4 bg-gradient-to-r from-blue-400 to-indigo-500 rounded"/>
       </div>
 
-      {/* 🔥 FILTER BUTTONS */}
+      {/* FILTER BUTTONS */}
       <div className="flex gap-3 flex-wrap justify-center mb-12">
 
         {filters.map((f) => (
@@ -74,7 +74,7 @@ export default function Updates() {
             key={f.id}
             onClick={() => setActive(f.id)}
             className={`
-              px-5 py-2 rounded-full text-[0.8rem] font-semibold uppercase tracking-[0.08em] border transition
+              px-5 py-2 rounded-full cursor-pointer text-[0.8rem] font-semibold uppercase tracking-[0.08em] border transition
               ${active === f.id
                 ? "border-blue-400 text-blue-400 bg-blue-400/10"
                 : "border-white/10 text-gray-500 hover:border-blue-400 hover:text-blue-400 hover:bg-blue-400/10"}
