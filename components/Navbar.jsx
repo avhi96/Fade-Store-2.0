@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react"
 import { usePathname } from "next/navigation"
 import clsx from "clsx"
 import Link from "next/link"
+import { ADMIN_IDS } from '@/lib/admins'
 
 const navItems = [
   { id: "home", label: "Home", href: "/" },
@@ -70,11 +71,20 @@ export default function Navbar() {
               </button>
             </Link>
           ) : (
-            <Link href="/profile">
-              <button className="px-5 py-2 rounded-lg text-gray-400 border border-white/10 bg-white/5 hover:text-blue-400 hover:border-blue-400 hover:bg-blue-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer">
-                ⬡ Profile
-              </button>
-            </Link>
+            <>
+              {session?.user && ADMIN_IDS.includes(session.user.discordId) && (
+                <Link href="/admin">
+                  <button className="px-5 py-2 rounded-lg text-orange-400 border border-orange-400/30 bg-orange-400/10 hover:bg-orange-400/20 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer">
+                     Admin
+                  </button>
+                </Link>
+              )}
+              <Link href="/profile">
+                <button className="px-5 py-2 rounded-lg text-gray-400 border border-white/10 bg-white/5 hover:text-blue-400 hover:border-blue-400 hover:bg-blue-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer">
+                  ⬡ Profile
+                </button>
+              </Link>
+            </>
           )}
         </div>
 

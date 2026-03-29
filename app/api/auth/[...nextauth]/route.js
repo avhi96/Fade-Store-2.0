@@ -9,12 +9,24 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
+    async jwt({ token, account, profile }) {
+      if (account) {
+        token.accessToken = account.access_token
+      }
+      if (profile) {
+        token.discordId = profile.id
+      }
+      return token
+    },
     session({ session, token }) {
-      session.user.id = token.sub
+      if (token) {
+        session.user.id = token.sub
+        session.user.discordId = token.discordId
+      }
       return session
     },
+
     redirect({ url, baseUrl }) {
-      // Redirect to home page after successful login
       return baseUrl
     },
   },

@@ -1,6 +1,8 @@
 "use client"
 
-export default function StoreCard({ p }) {
+import { Edit3, Trash2 } from 'lucide-react' 
+
+export default function StoreCard({ p, adminMode = false, onEdit, onDelete }) {
   const perksPreview = p.perks.slice(0, 3)
   const perksCount = p.perks.length
 
@@ -30,12 +32,12 @@ export default function StoreCard({ p }) {
 
       {/* BANNER */}
       <div
-        className="h-[140px] flex items-center justify-center relative"
+        className="h-[200px] flex items-center justify-center relative"
         style={{
           background: `linear-gradient(135deg, ${p.color}33, transparent)`
         }}
       >
-        <span className="text-5xl drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]">
+        <span className="text-7xl drop-shadow-[0_0_30px_rgba(59,130,246,0.5)]">
           {p.icon}
         </span>
       </div>
@@ -74,7 +76,7 @@ export default function StoreCard({ p }) {
             <div
               style={{
                 fontFamily: "Orbitron, monospace",
-                fontSize: "1.4rem",
+                fontSize: "1.8rem",
                 fontWeight: 700
               }}
             >
@@ -88,10 +90,29 @@ export default function StoreCard({ p }) {
             )}
           </div>
 
-          {/* BUTTON */}
-          <button className="px-5 py-2 text-[0.78rem] rounded-lg uppercase font-bold tracking-[0.08em] bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-[1px] hover:shadow-[0_4px_30px_rgba(59,130,246,0.5)] transition">
-            Buy →
-          </button>
+          {/* ACTION BUTTONS */}
+          {adminMode ? (
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(p); }}
+                className="p-2 text-blue-400 hover:text-blue-300 transition"
+                title="Edit"
+              >
+                <Edit3 size={16} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(p.id); }}
+                className="p-2 text-red-400 hover:text-red-300 transition"
+                title="Delete"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ) : (
+            <button className="px-5 py-2 text-[0.78rem] rounded-lg uppercase font-bold tracking-[0.08em] bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:-translate-y-[1px] hover:shadow-[0_4px_30px_rgba(59,130,246,0.5)] transition">
+              Buy →
+            </button>
+          )}
 
         </div>
       </div>

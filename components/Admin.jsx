@@ -8,6 +8,7 @@ import {
   Plus,
   BarChart3
 } from "lucide-react"
+import Link from "next/link"
 
 export default function Admin() {
 
@@ -143,11 +144,18 @@ export default function Admin() {
             </h3>
 
             <div className="flex flex-col gap-3">
-
-              <ActionBtn icon={Plus} label="Add Product" />
-              <ActionBtn icon={Users} label="Manage Users" />
-              <ActionBtn icon={ShoppingCart} label="View Orders" />
-              <ActionBtn icon={Settings} label="Store Settings" />
+              <Link href="/admin/products">
+                <ActionBtn icon={Plus} label="Add Product" />
+              </Link>
+              <Link href="/admin/users">
+                <ActionBtn icon={Users} label="Manage Users" />
+              </Link>
+              <Link href="/admin/orders">
+                <ActionBtn icon={ShoppingCart} label="View Orders" />
+              </Link>
+              <Link href="/admin/settings">
+                <ActionBtn icon={Settings} label="Store Settings" />
+              </Link>
 
             </div>
 

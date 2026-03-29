@@ -1,6 +1,7 @@
 "use client"
-import { useState } from "react"
-import { products } from "@/lib/data"
+import { useState, useEffect } from "react"
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import clsx from "clsx"
 import StoreCard from "./StoreCard"
 
@@ -13,11 +14,32 @@ const tabs = [
 
 export default function Store() {
   const [active, setActive] = useState("ranks")
+  const [productsData, setProductsData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const q = query(collection(db, 'products'), orderBy('name'))
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      setProductsData(data)
+      setLoading(false)
+    }, (err) => {
+      console.error('Firestore error:', err)
+      setError('Failed to load products')
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  if (loading) return <div className="text-center py-20 text-xl text-gray-400">Loading store...</div>
+  if (error) return <div className="text-center py-20 text-xl text-red-400">{error}</div>
 
   const filtered =
     active === "all"
-      ? products
-      : products.filter((p) => p.cat === active)
+      ? productsData
+      : productsData.filter((p) => p.cat === active)
 
   return (
     <section className="max-w-[1300px] mx-auto px-6 py-20">
