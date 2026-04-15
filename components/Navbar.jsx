@@ -109,11 +109,10 @@ export default function Navbar() {
             ✕
           </button>
 
-          {/* NAV ITEMS */}
+
           {navItems.map((item) => (
-            <Link href={item.href}>
+            <Link key={item.id} href={item.href}>
               <button
-                key={item.id}
                 onClick={() => {
                   setOpen(false)
                 }}
@@ -132,18 +131,27 @@ export default function Navbar() {
           {/* ACTIONS */}
           <div className="mt-6 flex flex-col gap-4 w-50">
 
-            {!session ? (
+          {!session ? (
               <Link href="/login">
                 <button className="w-full py-3 rounded-lg bg-[#5865F2] text-white uppercase font-bold">
                   Login with Discord
                 </button>
               </Link>
             ) : (
-              <Link href="/profile">
-                <button className="w-full py-3 font-bold rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase">
-                  Profile
-                </button>
-              </Link>
+              <>
+                <Link href="/profile">
+                  <button className="w-full py-3 font-bold rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase">
+                    Profile
+                  </button>
+                </Link>
+                {session?.user && ADMIN_IDS.includes(session.user.discordId) && (
+                  <Link href="/admin">
+                    <button className="w-full py-3 font-bold rounded-lg border border-orange-400/30 bg-orange-400/10 text-orange-400 uppercase">
+                      Admin
+                    </button>
+                  </Link>
+                )}
+              </>
             )}
 
           </div>

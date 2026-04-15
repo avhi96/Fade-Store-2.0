@@ -1,8 +1,11 @@
 import AdminAuthWrapper from "@/components/AdminAuthWrapper"
+import AdminProductsWrapper from "@/components/AdminProductsWrapper"
 
 export default function ProductsPage() {
   return (
-<AdminAuthWrapper />
+    <AdminAuthWrapper>
+      <AdminProductsWrapper />
+    </AdminAuthWrapper>
   )
 }
 

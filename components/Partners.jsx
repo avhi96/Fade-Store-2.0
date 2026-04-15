@@ -1,16 +1,59 @@
 "use client"
 
+import { useEffect, useState } from 'react'
 import { motion } from "framer-motion"
+import { getStoreSettings } from '@/lib/settings'
+import { getAllOrders } from '@/lib/orders'
 
 export default function Partners() {
+  const [partners, setPartners] = useState([])
+  const [topBuyers, setTopBuyers] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const partners = [
-    { name: "Fade Hosting", tag: "Hosting" },
-    { name: "Pixel Studios", tag: "Design" },
-    { name: "CryptoPay", tag: "Payments" },
-    { name: "Nova Nodes", tag: "Infrastructure" },
-    { name: "SkyNet", tag: "Network" },
-  ]
+  useEffect(() => {
+    const p = getStoreSettings()
+      .then((settings) => {
+        if (Array.isArray(settings?.partners) && settings.partners.length > 0) {
+          setPartners(settings.partners)
+        } else {
+          setPartners([])
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load partners from settings', err)
+        setPartners([])
+      })
+
+    const o = getAllOrders()
+      .then((orders) => {
+        const buyerMap = orders.reduce((acc, order) => {
+          if (!order?.userId) return acc
+          const key = order.userId
+          acc[key] = acc[key] || {
+            userId: order.userId,
+            userName: order.userName || 'Unknown',
+            total: 0,
+            orders: 0
+          }
+          const price = Number(order.product?.price || 0)
+          acc[key].total += price
+          acc[key].orders += 1
+          return acc
+        }, {})
+
+        const sorted = Object.values(buyerMap)
+          .sort((a, b) => b.total - a.total || b.orders - a.orders)
+          .slice(0, 5)
+
+        setTopBuyers(sorted)
+      })
+      .catch((err) => {
+        console.error('Failed to load orders for top buyers', err)
+        setTopBuyers([])
+      })
+
+    Promise.all([p, o]).finally(() => setLoading(false))
+  }, [])
 
   // animations
   const fadeUp = {
@@ -73,51 +116,52 @@ export default function Partners() {
 
       {/* PARTNERS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 mb-24">
-
-        {partners.map((p, i) => (
-          <motion.div
-            key={i}
-            custom={i}
-            initial="hidden"
-            animate="show"
-            variants={fadeUp}
-            whileHover={{ y: -6 }}
-            className="group relative p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl transition"
-          >
-
-            {/* hover glow line */}
-            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-0 group-hover:opacity-100 transition" />
-
-            {/* avatar */}
-            <div className="w-[70px] h-[70px] rounded-full bg-gradient-to-br from-indigo-500 to-pink-500 flex items-center justify-center text-white text-xl mb-4 shadow-[0_0_20px_rgba(99,179,237,0.3)] group-hover:shadow-[0_0_30px_rgba(99,179,237,0.6)] transition">
-              {p.name.charAt(0)}
-            </div>
-
-            {/* name */}
-            <div
-              className="text-white text-sm mb-1"
-              style={{
-                fontFamily: "Orbitron, monospace",
-                fontWeight: 700,
-                letterSpacing: "0.06em"
-              }}
+        {loading ? (
+          <div className="col-span-full text-center text-gray-400">Loading partners...</div>
+        ) : partners.length === 0 ? (
+          <div className="col-span-full text-center text-gray-400">No partners available. Add partners in Admin Settings.</div>
+        ) : (
+          partners.map((p, i) => (
+            <motion.div
+              key={i}
+              custom={i}
+              initial="hidden"
+              animate="show"
+              variants={fadeUp}
+              whileHover={{ y: -6 }}
+              className="group relative p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl transition"
             >
-              {p.name}
-            </div>
 
-            {/* tag */}
-            <div className="text-gray-400 text-xs mb-4">
-              {p.tag}
-            </div>
+              {/* hover glow line */}
+              <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-0 group-hover:opacity-100 transition" />
 
-            {/* code box */}
-            <div className="bg-white/[0.05] border border-white/10 rounded-lg px-4 py-2 text-blue-400 text-xs tracking-[0.15em] font-mono group-hover:border-blue-400/40 transition">
-              USE CODE {p.name.split(" ")[0].toUpperCase()}
-            </div>
+              {/* partner header */}
+              <div className="mb-3">
+                <div className="text-white text-base font-semibold" style={{ fontFamily: 'Orbitron, monospace', letterSpacing: '0.06em' }}>
+                  {p?.name || 'Unnamed Partner'}
+                </div>
+                <div className="text-gray-400 text-xs mt-1">{p?.tag || 'Tag not set'}</div>
+              </div>
 
-          </motion.div>
-        ))}
+              {/* link button */}
+              <div className="mt-4">
+                {p?.url ? (
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-4 py-2 rounded-lg bg-blue-500 text-xs font-semibold uppercase tracking-wider text-white hover:bg-blue-400 transition"
+                  >
+                    Visit Partner
+                  </a>
+                ) : (
+                  <span className="text-xs text-gray-500">No partner link set</span>
+                )}
+              </div>
 
+            </motion.div>
+          ))
+        )}
       </div>
 
       {/* 🔷 TOP BUYERS */}
@@ -128,57 +172,50 @@ export default function Partners() {
         </div>
 
         <div className="flex flex-col gap-3">
-
-          {[1, 2, 3].map((rank, i) => (
-            <motion.div
-              key={rank}
-              custom={i}
-              initial="hidden"
-              animate="show"
-              variants={fadeUp}
-              whileHover={{ scale: 1.01 }}
-              className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl transition hover:border-blue-400/40"
-            >
-
-              {/* rank */}
-              <div
-                className="w-[40px] text-center font-bold"
-                style={{ fontFamily: "Orbitron, monospace" }}
+          {loading ? (
+            <div className="text-gray-400">Loading top buyers...</div>
+          ) : topBuyers.length === 0 ? (
+            <div className="text-gray-400">No buyers yet</div>
+          ) : (
+            topBuyers.map((buyer, i) => (
+              <motion.div
+                key={buyer.userId}
+                custom={i}
+                initial="hidden"
+                animate="show"
+                variants={fadeUp}
+                whileHover={{ scale: 1.01 }}
+                className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl transition hover:border-blue-400/40"
               >
-                #{rank}
-              </div>
 
-              {/* avatar */}
-              <div className="w-[44px] h-[44px] rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white">
-                U
-              </div>
-
-              {/* info */}
-              <div>
-                <div className="text-white text-sm font-semibold">
-                  Player{rank}
-                </div>
-                <div className="text-gray-400 text-xs">
-                  Top Supporter
-                </div>
-              </div>
-
-              {/* amount */}
-              <div className="ml-auto text-right">
                 <div
-                  className="text-yellow-400 text-sm font-bold"
+                  className="w-[40px] text-center font-bold"
                   style={{ fontFamily: "Orbitron, monospace" }}
                 >
-                  ${rank * 120}
+                  #{i + 1}
                 </div>
-                <div className="text-gray-400 text-xs">
-                  {rank * 5} orders
+
+                <div className="w-[44px] h-[44px] rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white">
+                  {buyer.userName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-              </div>
 
-            </motion.div>
-          ))}
+                <div>
+                  <div className="text-white text-sm font-semibold">{buyer.userName}</div>
+                  <div className="text-gray-400 text-xs">{buyer.orders} orders</div>
+                </div>
 
+                <div className="ml-auto text-right">
+                  <div
+                    className="text-yellow-400 text-sm font-bold"
+                    style={{ fontFamily: "Orbitron, monospace" }}
+                  >
+                    ₹{buyer.total.toFixed(2)}
+                  </div>
+                </div>
+
+              </motion.div>
+            ))
+          )}
         </div>
 
       </div>

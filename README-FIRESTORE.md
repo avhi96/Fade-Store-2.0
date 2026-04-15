@@ -1,40 +1,79 @@
-# Firestore Integration Complete
+# Firestore Setup for Fade Store
 
-## Features Added
-- **Store page**: Real-time products from Firestore 'products' collection
-- **Admin dashboard** (`/admin`): Discord login required
-  - Products table with delete
-  - Add product modal (name, cat, icon, price, old price, perks (lines), badge, color)
-  - Sign out button
-- Static data deprecated
+## Collections
 
-## Setup
-1. Ensure Firebase project 'fade-0l3' Firestore enabled
-2. Rules:
+### 1. `products` (for store)
+```
+products/{productId}
+  - name: string
+  - cat: 'ranks' | 'keys' | 'money' | 'bundles'
+  - icon: string (Crown, Star, etc.)
+  - price: number
+  - old: number (original price)
+  - badge: 'popular' | 'sale' | 'new' | ''
+  - color: hex color
+  - perks: array of strings
+  - createdAt: timestamp
+```
+
+### 2. `users` (for admin panel)
+```
+users/{userId}
+  - name: string
+  - email: string  
+  - discordId: string
+  - points: number (default 0)
+  - purchases: array of product refs
+  - isBanned: boolean (default false)
+  - createdAt: timestamp
+  - updatedAt: timestamp (optional)
+```
+
+### 3. `orders` (future)
+```
+orders/{orderId}
+  - userId: string
+  - products: array
+  - total: number
+  - status: 'pending' | 'completed' | 'failed'
+  - createdAt: timestamp
+```
+
+## Security Rules
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Authenticated users can read products
     match /products/{doc} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if false; // Admin only via Functions
+    }
+    
+    // Users can read/write own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null; // Admin reads all
+    }
+    
+    // Orders
+    match /orders/{doc} {
+      allow read, write: if request.auth != null;
     }
   }
 }
 ```
-3. `npm run dev`
-4. Login Discord at `/admin`, add products
-5. View at `/store` – real-time sync!
 
-## Test Data Example
+## Quick Test Data
+Add to `users` collection:
 ```
-name: "VIP"
-cat: "ranks"
-icon: "⭐"
-price: 4.99
-perks: "Custom prefix\nVIP commands\n2x rewards"
-color: "#63b3ed"
+userId: test1
+name: Test User
+email: test@example.com
+discordId: 123456789
+points: 150
+purchases: [] 
+isBanned: false
+createdAt: now()
 ```
-
-Buy button ready for Stripe extension.
 

@@ -84,3 +84,35 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
 }
 
+.input {
+  @apply w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm outline-none focus:border-blue-400/40 transition backdrop-blur;
+}
+
+.card {
+  @apply p-5 rounded-xl border border-white/10 bg-white/[0.04] backdrop-blur-xl;
+}
+
+.btn-primary {
+  @apply flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium hover:from-blue-700 hover:to-cyan-700 transition-all shadow-lg hover:shadow-xl border border-white/20;
+}
+
+.admin-product-grid {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .admin-product-grid {
+    grid-template-columns: repeat(3, minmax(350px, 1fr));
+    gap: 2rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .admin-product-grid {
+    grid-template-columns: repeat(4, minmax(320px, 1fr));
+    gap: 2.5rem;
+  }
+}
+

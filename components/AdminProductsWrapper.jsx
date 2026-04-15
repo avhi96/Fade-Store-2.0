@@ -3,5 +3,5 @@
 import AdminProducts from './AdminProducts'
 
 export default function AdminProductsWrapper() {
-  return <AdminProducts />
+  return <AdminProducts isAdmin={true} />
 }

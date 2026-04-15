@@ -1,5 +1,7 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from 'react'
+import { List } from 'lucide-react'
+import { getStoreUpdates } from '@/lib/updates'
 
 const filters = [
   { id: "all", label: "All" },
@@ -10,35 +12,13 @@ const filters = [
 
 export default function Updates() {
   const [active, setActive] = useState("all")
+  const [updates, setUpdates] = useState([])
 
-  const updates = [
-    {
-      id: 1,
-      title: "Season 2 Released",
-      type: "announcement",
-      date: "March 2026",
-      desc: "New crates, updated ranks, and improved rewards system.",
-    },
-    {
-      id: 2,
-      title: "Flash Sale 30% OFF",
-      type: "event",
-      date: "Limited Time",
-      desc: "All ranks discounted for a limited time. Grab now!",
-    },
-    {
-      id: 3,
-      title: "Patch 1.2 Released",
-      type: "patch",
-      date: "Update Log",
-      desc: "Improved performance and fixed purchase delay issues.",
-    },
-  ]
+  useEffect(() => {
+    getStoreUpdates().then(setUpdates)
+  }, [])
 
-  const filtered =
-    active === "all"
-      ? updates
-      : updates.filter((u) => u.type === active)
+  const filtered = active === "all" ? updates : updates.filter((u) => u.type === active)
 
   return (
     <section className="max-w-[1100px] mx-auto px-6 py-20">
@@ -68,7 +48,6 @@ export default function Updates() {
 
       {/* FILTER BUTTONS */}
       <div className="flex gap-3 flex-wrap justify-center mb-12">
-
         {filters.map((f) => (
           <button
             key={f.id}
@@ -83,24 +62,17 @@ export default function Updates() {
             {f.label}
           </button>
         ))}
-
       </div>
 
       {/* LIST */}
       <div className="flex flex-col gap-6">
-
         {filtered.map((u) => (
           <div
             key={u.id}
             className="group relative p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl transition hover:-translate-y-[4px] hover:border-blue-400/40"
           >
-
-            {/* GLOW */}
             <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-0 group-hover:opacity-100 transition" />
-
-            {/* TYPE + DATE */}
             <div className="flex justify-between mb-3">
-
               <span className={`
                 px-3 py-1 text-[0.65rem] uppercase font-bold tracking-[0.1em] rounded-full
                 ${u.type === "announcement" && "bg-blue-400/20 text-blue-400 border border-blue-400/30"}
@@ -109,13 +81,10 @@ export default function Updates() {
               `}>
                 {u.type}
               </span>
-
               <span className="text-xs text-gray-500">
-                {u.date}
+                {u.date || 'Recent'}
               </span>
             </div>
-
-            {/* TITLE */}
             <h3
               className="mb-2 text-white"
               style={{
@@ -126,20 +95,23 @@ export default function Updates() {
             >
               {u.title}
             </h3>
-
-            {/* DESC */}
             <p
               className="text-gray-400 text-sm leading-relaxed"
               style={{ fontFamily: "Rajdhani, sans-serif" }}
             >
               {u.desc}
             </p>
-
           </div>
         ))}
-
+        {filtered.length === 0 && (
+            <div className="text-center py-16 text-gray-500">
+              <List className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <h3>No updates yet</h3>
+            </div>
+        )}
       </div>
 
     </section>
   )
 }
+

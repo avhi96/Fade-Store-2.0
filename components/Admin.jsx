@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from 'react'
 import {
   Users,
   ShoppingCart,
@@ -9,22 +10,41 @@ import {
   BarChart3
 } from "lucide-react"
 import Link from "next/link"
+import { getAllOrders } from '@/lib/orders'
 
 export default function Admin() {
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // 🔥 DEMO DATA (replace later with DB)
-  const stats = {
-    revenue: 12800,
-    orders: 124,
-    users: 58,
-    pointsIssued: 5420
+  useEffect(() => {
+    getAllOrders()
+      .then((data) => {
+        setOrders(data)
+        setLoading(false)
+      })
+      .catch((err) => {
+        setError(err?.message || 'Failed to load orders')
+        setLoading(false)
+      })
+  }, [])
+
+  const totalRevenue = orders.reduce((sum, order) => sum + (order?.product?.price || 0), 0)
+  const uniqueUsers = new Set(orders.map((o) => o.userId)).size
+  const recentOrders = orders.slice(0, 3)
+
+  const revenueValue = loading ? 'Loading...' : orders.length > 0 ? `₹${totalRevenue.toFixed(2)}` : '0'
+  const ordersValue = loading ? 'Loading...' : orders.length > 0 ? orders.length : '0'
+  const usersValue = loading ? 'Loading...' : uniqueUsers > 0 ? uniqueUsers : '0'
+  const pointsValue = loading ? 'Loading...' : (orders.length > 0 ? 'Calculated' : '0')
+
+  if (error) {
+    return (
+      <section className="max-w-[1300px] mx-auto px-6 py-24">
+        <div className="text-red-400">Error loading admin data: {error}</div>
+      </section>
+    )
   }
-
-  const recentOrders = [
-    { user: "Avhi", item: "VIP Rank", price: 249 },
-    { user: "Rohan", item: "Epic Key", price: 99 },
-    { user: "Aryan", item: "Money Pack", price: 499 },
-  ]
 
   return (
     <section className="max-w-[1300px] mx-auto px-6 py-24">
@@ -50,20 +70,21 @@ export default function Admin() {
         <div className="w-[60px] h-[2px] mt-4 bg-gradient-to-r from-blue-400 to-indigo-500 rounded" />
       </div>
 
-      {/* 🔥 STATS */}
+      {/* STATS */}
       <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-5 mb-12">
 
-        <Stat icon={DollarSign} label="Revenue" value={`₹${stats.revenue}`} />
-        <Stat icon={ShoppingCart} label="Orders" value={stats.orders} />
-        <Stat icon={Users} label="Users" value={stats.users} />
-        <Stat icon={BarChart3} label="Points Issued" value={stats.pointsIssued} />
+        <Stat icon={DollarSign} label="Revenue" value={revenueValue} />
+        <Stat icon={ShoppingCart} label="Total Orders" value={ordersValue} />
+        <Stat icon={Users} label="Unique Users" value={usersValue} />
+        <Stat icon={BarChart3} label="Points" value={pointsValue} />
+
 
       </div>
 
-      {/* 🔥 MAIN GRID */}
+      {/*  MAIN GRID */}
       <div className="grid md:grid-cols-[1fr_320px] gap-8">
 
-        {/* 🧊 LEFT SIDE */}
+        {/*  LEFT SIDE */}
         <div className="flex flex-col gap-6">
 
           {/* RECENT ORDERS */}
@@ -77,24 +98,21 @@ export default function Admin() {
             </h3>
 
             <div className="flex flex-col gap-4">
-
-              {recentOrders.map((o, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center border-b border-white/5 pb-3 hover:border-blue-400/30 transition"
-                >
-                  <div>
-                    <div className="text-white text-sm">{o.item}</div>
-                    <div className="text-gray-500 text-xs">{o.user}</div>
+              {loading ? (
+                <div className="text-gray-400">Loading recent orders...</div>
+              ) : orders.length === 0 ? (
+                <div className="text-gray-400">No purchases yet</div>
+              ) : (
+                recentOrders.map((order) => (
+                  <div key={order.orderId} className="p-3 rounded-lg bg-white/5 border border-white/10">
+                    <div className="text-sm text-gray-300">{order.userName || 'Unknown User'}</div>
+                    <div className="text-white font-semibold">{order.product?.name || 'Unknown Product'}</div>
+                    <div className="text-xs text-gray-400">₹{order.product?.price?.toFixed(2) ?? '0.00'}</div>
                   </div>
-
-                  <div className="text-yellow-400 font-bold">
-                    ₹{o.price}
-                  </div>
-                </div>
-              ))}
-
+                ))
+              )}
             </div>
+
 
           </div>
 
@@ -130,7 +148,7 @@ export default function Admin() {
 
         </div>
 
-        {/* 🧊 RIGHT SIDE */}
+        {/* RIGHT SIDE */}
         <div className="flex flex-col gap-6">
 
           {/* QUICK ACTIONS */}
@@ -143,20 +161,22 @@ export default function Admin() {
               Quick Actions
             </h3>
 
-            <div className="flex flex-col gap-3">
-              <Link href="/admin/products">
+            <div className="grid grid-cols-1 gap-3">
+              <Link href="/admin/products" className="block">
                 <ActionBtn icon={Plus} label="Add Product" />
               </Link>
-              <Link href="/admin/users">
+              <Link href="/admin/users" className="block">
                 <ActionBtn icon={Users} label="Manage Users" />
               </Link>
-              <Link href="/admin/orders">
+              <Link href="/admin/orders" className="block">
                 <ActionBtn icon={ShoppingCart} label="View Orders" />
               </Link>
-              <Link href="/admin/settings">
+              <Link href="/admin/updates" className="block">
+                <ActionBtn icon={BarChart3} label="Site Updates" />
+              </Link>
+              <Link href="/admin/settings" className="block">
                 <ActionBtn icon={Settings} label="Store Settings" />
               </Link>
-
             </div>
 
           </div>
@@ -185,7 +205,7 @@ export default function Admin() {
   )
 }
 
-/* 🔧 COMPONENTS */
+/* COMPONENTS */
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -208,11 +228,9 @@ function Stat({ icon: Icon, label, value }) {
 
 function ActionBtn({ icon: Icon, label }) {
   return (
-    <button className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/[0.03] text-gray-300 hover:border-blue-400/40 hover:text-blue-400 transition">
-
-      <Icon size={16} />
+    <button className="w-full flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/[0.03] text-gray-300 hover:border-blue-400/40 hover:text-blue-400 hover:bg-blue-400/10 transition-all group">
+      <Icon size={16} className="group-hover:scale-110 transition-transform" />
       {label}
-
     </button>
   )
 }
