@@ -14,6 +14,7 @@ const navItems = [
 ]
 
 import { useState } from "react"
+import { useCart } from '@/hooks/useCart'
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
@@ -22,6 +23,7 @@ export default function Navbar() {
   const activeItem = navItems.find(item => pathname === item.href || pathname.startsWith(item.href + "/"))?.id || "home"
 
   const { data: session } = useSession()
+  const { itemCount } = useCart()
 
   return (
     <>
@@ -80,8 +82,13 @@ export default function Navbar() {
                 </Link>
               )}
               <Link href="/profile">
-                <button className="px-5 py-2 rounded-lg text-gray-400 border border-white/10 bg-white/5 hover:text-blue-400 hover:border-blue-400 hover:bg-blue-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer">
+                <button className="px-5 py-2 rounded-lg text-gray-400 border border-white/10 bg-white/5 hover:text-blue-400 hover:border-blue-400 hover:bg-blue-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer relative">
                   ⬡ Profile
+                  {itemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[0.65rem] font-black shadow-lg">
+                      {itemCount}
+                    </span>
+                  )}
                 </button>
               </Link>
             </>
@@ -140,8 +147,13 @@ export default function Navbar() {
             ) : (
               <>
                 <Link href="/profile">
-                  <button className="w-full py-3 font-bold rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase">
+                  <button className="w-full py-3 font-bold rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase relative">
                     Profile
+                    {itemCount > 0 && (
+                      <span className="absolute -top-1 -right-3 flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[0.65rem] font-black shadow-lg">
+                        {itemCount}
+                      </span>
+                    )}
                   </button>
                 </Link>
                 {session?.user && ADMIN_IDS.includes(session.user.discordId) && (

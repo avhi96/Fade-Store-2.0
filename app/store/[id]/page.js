@@ -1,30 +1,39 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { useCart } from "@/hooks/useCart"
 import { doc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { ArrowLeft } from "lucide-react"
-import * as Lucide from "lucide-react"
-import Navbar from "@/components/Navbar"
+import { ArrowLeft, Crown, Star, Award, Diamond, Key, Lock, Shield, DollarSign, Coins, CreditCard, Package, Gift, ShoppingBag } from "lucide-react"
+import dynamic from 'next/dynamic'
+import { NavbarSkeleton } from "@/components/Skeleton"
+
+
+const NavbarDynamic = dynamic(() => import("@/components/Navbar"), {
+  loading: NavbarSkeleton
+})
+
 import Image from "next/image"
 import Skeleton from "@/components/Skeleton"
 import { ProductDetailSkeleton } from "@/components/Skeleton"
 
+
 const iconMap = {
-  Crown: Lucide.Crown,
-  Star: Lucide.Star,
-  Award: Lucide.Award,
-  Diamond: Lucide.Diamond,
-  Key: Lucide.Key,
-  Lock: Lucide.Lock,
-  Shield: Lucide.Shield,
-  DollarSign: Lucide.DollarSign,
-  Coins: Lucide.Coins,
-  CreditCard: Lucide.CreditCard,
-  Package: Lucide.Package,
-  Gift: Lucide.Gift,
-  ShoppingBag: Lucide.ShoppingBag
+  Crown,
+  Star,
+  Award,
+  Diamond,
+  Key,
+  Lock,
+  Shield,
+  DollarSign,
+  Coins,
+  CreditCard,
+  Package,
+  Gift,
+  ShoppingBag
 }
 
 export default function ProductDetail() {
@@ -34,27 +43,48 @@ export default function ProductDetail() {
 
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [cart, setCart] = useState([])
+  const { cart, clearCart, addToCart } = useCart()
+  const { data: session } = useSession()
 
-  // Load cart
-  useEffect(() => {
-    const stored = localStorage.getItem("cartItems")
-    if (stored) setCart(JSON.parse(stored))
-  }, [])
 
-  // Fetch product
+
+// Fetch product with 5min localStorage cache
   useEffect(() => {
     if (!productId) return
+
+    const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+    const cacheKey = `product_${productId}`
+    const cachedStr = localStorage.getItem(cacheKey)
+    
+    if (cachedStr) {
+      try {
+        const cached = JSON.parse(cachedStr)
+        if (Date.now() - cached.cachedAt < CACHE_DURATION) {
+          setProduct(cached.data)
+          setLoading(false)
+          return
+        }
+      } catch (e) {
+        console.log('Cache invalid')
+      }
+    }
 
     const ref = doc(db, "products", productId)
 
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
-        setProduct({ id: productId, ...snap.data() })
+        const dataWithCache = { 
+          id: productId, 
+          ...snap.data(), 
+          cachedAt: Date.now() 
+        }
+        setProduct(dataWithCache)
+        localStorage.setItem(cacheKey, JSON.stringify({ data: dataWithCache, cachedAt: Date.now() }))
       } else {
         setProduct(null)
+        localStorage.removeItem(cacheKey)
       }
-      setLoading(false)
+      if (loading) setLoading(false)
     })
 
     return unsub
@@ -62,26 +92,25 @@ export default function ProductDetail() {
 
   const handleAddToCart = () => {
     if (!product) return
+    addToCart(product)
+  }
 
-    const existing = cart.find((i) => i.id === product.id)
-
-    let newCart
-    if (existing) {
-      newCart = cart.map((i) =>
-        i.id === product.id ? { ...i, qty: (i.qty || 1) + 1 } : i
-      )
-    } else {
-      newCart = [...cart, { ...product, qty: 1 }]
+  const handleBuyNow = () => {
+    if (!session) {
+      router.push('/login')
+      return
     }
 
-    setCart(newCart)
-    localStorage.setItem("cartItems", JSON.stringify(newCart))
+    // Temp cart with single item - clear first ensures clean state
+    clearCart()
+    addToCart({ ...product, qty: 1 })
+    router.push('/checkout')
   }
 
   if (loading) {
     return (
       <>
-        <Navbar />
+        <NavbarDynamic />
         <Skeleton>
           <div className="pt-[70px]">
             <ProductDetailSkeleton />
@@ -91,16 +120,18 @@ export default function ProductDetail() {
     )
   }
 
+
   if (!product) {
     return (
       <>
-        <Navbar />
+        <NavbarDynamic />
         <div className="pt-[70px] min-h-screen flex items-center justify-center text-white">
           Product not found
         </div>
       </>
     )
   }
+
 
   const IconComponent =
     product.icon && iconMap[product.icon]
@@ -121,9 +152,10 @@ export default function ProductDetail() {
 
   return (
     <>
-      <Navbar />
+      <NavbarDynamic />
 
       <main className="pt-[70px] pb-16 px-6 max-w-[1200px] mx-auto">
+
 
         {/* BACK */}
         <button
@@ -153,8 +185,11 @@ export default function ProductDetail() {
                   alt={product.name}
                   fill
                   className="object-contain p-10"
+                  loading="lazy"
+                  sizes="(max-width: 768px) 100vw, 50vw"
                   unoptimized
                 />
+
               ) : IconComponent ? (
                 <IconComponent size={120} className="text-white/80" />
               ) : null}
@@ -210,7 +245,10 @@ export default function ProductDetail() {
                 {isInCart ? "Added" : "Add to Cart"}
               </button>
 
-              <button className="flex-1 py-3 rounded-xl cursor-pointer bg-white/10 text-white hover:bg-white/20 transition">
+              <button 
+                onClick={handleBuyNow}
+                className="flex-1 py-4 rounded-xl cursor-pointer font-bold tracking-wide bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:from-emerald-600 hover:to-green-700 transition-all shadow-xl shadow-emerald-500/25 hover:scale-[1.02]"
+              >
                 Buy Now
               </button>
 
@@ -221,50 +259,67 @@ export default function ProductDetail() {
         </div>
 
         {/* PERKS */}
-        {perksArray.length > 0 && (
-          <div className="mb-16">
-
-            <h2
-              className="text-xl font-bold mb-6"
-              style={{ fontFamily: "Orbitron, monospace" }}
-            >
-              Features
-            </h2>
-
-            <div className="grid md:grid-cols-3 gap-4">
-              {perksArray.map((perk, i) => (
-                <div
-                  key={i}
-                  className="p-4 rounded-xl bg-white/[0.04] border border-white/10 flex gap-3 items-start hover:border-blue-400/40 transition"
-                >
-                  <div className="w-2 h-2 bg-blue-400 rounded-full mt-2" />
-                  <span className="text-gray-300 text-sm">
-                    {perk}
-                  </span>
-                </div>
-              ))}
+{perksArray.length > 0 && (
+          <Suspense fallback={
+            <div className="mb-16 animate-pulse">
+              <div className="h-7 w-24 bg-gray-700/50 rounded animate-pulse mb-6" style={{ fontFamily: "Orbitron, monospace" }} />
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="h-20 p-4 rounded-xl bg-white/[0.04] border border-white/10" />
+                <div className="h-20 p-4 rounded-xl bg-white/[0.04] border border-white/10" />
+                <div className="h-20 p-4 rounded-xl bg-white/[0.04] border border-white/10" />
+              </div>
             </div>
+          }>
+            <div className="mb-16">
+              <h2
+                className="text-xl font-bold mb-6"
+                style={{ fontFamily: "Orbitron, monospace" }}
+              >
+                Features
+              </h2>
 
-          </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                {perksArray.map((perk, i) => (
+                  <div
+                    key={i}
+                    className="p-4 rounded-xl bg-white/[0.04] border border-white/10 flex gap-3 items-start hover:border-blue-400/40 transition"
+                  >
+                    <div className="w-2 h-2 bg-blue-400 rounded-full mt-2" />
+                    <span className="text-gray-300 text-sm">
+                      {perk}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          </Suspense>
         )}
+
 
         {/* DESCRIPTION */}
-        {product.details && (
-          <div>
-
-            <h2
-              className="text-xl font-bold mb-6"
-              style={{ fontFamily: "Orbitron, monospace" }}
-            >
-              Description
-            </h2>
-
-            <div className="p-6 rounded-2xl bg-white/[0.04] border border-white/10 text-gray-300 whitespace-pre-wrap">
-              {product.details}
+{product.details && (
+          <Suspense fallback={
+            <div className="animate-pulse">
+              <div className="h-7 w-28 bg-gray-700/50 rounded mb-6" style={{ fontFamily: "Orbitron, monospace" }} />
+              <div className="h-32 p-6 rounded-2xl bg-white/[0.04] border border-white/10" />
             </div>
+          }>
+            <div>
+              <h2
+                className="text-xl font-bold mb-6"
+                style={{ fontFamily: "Orbitron, monospace" }}
+              >
+                Description
+              </h2>
 
-          </div>
+              <div className="p-6 rounded-2xl bg-white/[0.04] border border-white/10 text-gray-300 whitespace-pre-wrap">
+                {product.details}
+              </div>
+            </div>
+          </Suspense>
         )}
+
 
       </main>
     </>

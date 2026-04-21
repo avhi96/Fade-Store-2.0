@@ -10,12 +10,15 @@ import {
 } from "lucide-react"
 
 import { useSession, signOut } from "next-auth/react"
+import { useState, useEffect } from "react"
+import { getUser, getSpendRank } from "@/lib/client-users"
+import { ADMIN_IDS } from "@/lib/admins"
 
 export default function Profile() {
 
   const { data: session, status } = useSession()
 
-  // ⏳ loading state
+  // loading state
   if (status === "loading") {
     return (
       <div className="text-center py-20 text-gray-400">
@@ -24,7 +27,7 @@ export default function Profile() {
     )
   }
 
-  // ❌ not logged in
+  // not logged in
   if (!session) {
     return (
       <div className="text-center py-20 text-gray-400">
@@ -33,23 +36,48 @@ export default function Profile() {
     )
   }
 
-  // ✅ real user data
+  const [userData, setUserData] = useState(null)
+  const [loadingData, setLoadingData] = useState(true)
+
+  useEffect(() => {
+    async function loadUser() {
+      if (session?.user?.id) {
+        const data = await getUser(session.user.id)
+        setUserData(data)
+      }
+      setLoadingData(false)
+    }
+    loadUser()
+  }, [session])
+
+  if (loadingData) {
+    return (
+      <div className="text-center py-20 text-gray-400">
+        Loading your data...
+      </div>
+    )
+  }
+
+  const totalSpent = userData ? (userData.totalSpent || []).reduce((sum, s) => sum + s, 0) : 0
+  const isAdmin = ADMIN_IDS.includes(session.user.id)
+  const spendRank = getSpendRank(totalSpent)
+  const rankObj = isAdmin ? { name: 'Admin', color: 'from-red-500 to-pink-500' } : spendRank
   const user = {
     name: session.user.name,
     avatar: session.user.image,
     tag: session.user.name,
-    rank: "Premium"
+    rank: rankObj.name
   }
 
-  // 🔥 demo purchases (later from DB)
-  const purchases = [
-    { name: "VIP Rank", price: 249, date: "March 2026" },
-    { name: "Epic Key", price: 99, date: "Feb 2026" },
-    { name: "Money Pack", price: 499, date: "Jan 2026" },
-  ]
+  const purchases = (userData?.purchases || []).slice(0, 5).map(p => ({
+    name: p.name,
+    price: p.price,
+    date: p.timestamp ? p.timestamp.toDate().toLocaleDateString() : 'Recent'
+  })).reverse()
 
-  // 🔥 POINTS SYSTEM (replace later with DB)
-  const points = 420
+  const points = userData?.points || 0
+
+  const orderCount = userData?.purchases?.length || 0
 
   return (
     <section className="max-w-[1200px] mx-auto px-6 py-24">
@@ -74,10 +102,10 @@ export default function Profile() {
         <div className="w-[60px] h-[2px] mx-auto mt-4 bg-gradient-to-r from-blue-400 to-indigo-500 rounded" />
       </div>
 
-      {/* 🔷 LAYOUT */}
+      {/* LAYOUT */}
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
 
-        {/* 🧊 LEFT PANEL */}
+        {/* LEFT PANEL */}
         <div className="p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl text-center">
 
           {/* AVATAR */}
@@ -102,14 +130,24 @@ export default function Profile() {
           <div className="text-gray-400 text-sm mb-4">{user.tag}</div>
 
           {/* RANK */}
-          <div className="inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-[0.12em] bg-gradient-to-r from-yellow-400 to-orange-500 text-black mb-6">
+  <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-[0.12em] bg-gradient-to-r ${rankObj.color} text-black mb-6 shadow-lg`}>
             {user.rank}
           </div>
 
+          {!isAdmin && rankObj.progress !== undefined && rankObj.progress < 100 && (
+            <div className="mb-6">
+              <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Progress to {rankObj.next ? `next ${getSpendRank(rankObj.next).name}` : 'Max Rank'}</div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div className="bg-gradient-to-r ${rankObj.color} h-2 rounded-full transition-all" style={{width: `${Math.min(rankObj.progress, 100)}%`}}></div>
+              </div>
+              <div className="text-xs text-gray-400 mt-1 text-right">₹{rankObj.next ? rankObj.next - totalSpent : 0} to next</div>
+            </div>
+          )}
+
           {/* MINI STATS */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <MiniStat label="Spent" value="₹1280" />
-            <MiniStat label="Orders" value="12" />
+          <MiniStat label="Spent" value={`₹${totalSpent}`} />
+            <MiniStat label="Orders" value={orderCount.toString()} />
           </div>
 
           {/* ACTIONS */}
@@ -137,24 +175,24 @@ export default function Profile() {
 
         </div>
 
-        {/* 🧊 RIGHT PANEL */}
+        {/* RIGHT PANEL */}
         <div className="flex flex-col gap-6">
 
-          {/* 🔥 POINTS SYSTEM */}
+          {/* POINTS SYSTEM */}
           <div className="p-5 rounded-xl border border-blue-400/20 bg-blue-400/5 backdrop-blur-xl">
 
             <div className="flex items-center justify-between">
 
               <div>
                 <div className="text-[0.7rem] uppercase tracking-[0.15em] text-blue-400 mb-1">
-                  Nexus Points
+                  Fade Points
                 </div>
 
                 <div
                   className="text-white text-xl font-bold"
                   style={{ fontFamily: "Orbitron, monospace" }}
                 >
-                  {points}
+                  {points.toLocaleString()}
                 </div>
               </div>
 
@@ -166,14 +204,14 @@ export default function Profile() {
 
           </div>
 
-          {/* 🔥 STATS */}
+          {/* STATS */}
           <div className="grid sm:grid-cols-3 gap-5">
-            <StatCard icon={DollarSign} label="Total Spent" value="₹1280" />
-            <StatCard icon={ShoppingCart} label="Orders" value="12" />
+            <StatCard icon={DollarSign} label="Total Spent" value={`₹${totalSpent}`} />
+            <StatCard icon={ShoppingCart} label="Orders" value={orderCount.toString()} />
             <StatCard icon={User} label="Account Type" value={user.rank} />
           </div>
 
-          {/* 🔥 PURCHASE HISTORY */}
+          {/* PURCHASE HISTORY */}
           <div className="p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl">
 
             <div className="flex items-center justify-between mb-6">
@@ -222,7 +260,7 @@ export default function Profile() {
   )
 }
 
-/* 🔧 COMPONENTS */
+/* COMPONENTS */
 
 function StatCard({ icon: Icon, label, value }) {
   return (

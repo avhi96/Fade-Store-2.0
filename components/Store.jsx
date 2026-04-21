@@ -1,6 +1,5 @@
 "use client"
 import { useState, useEffect } from "react"
-import { useSearchParams } from 'next/navigation'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import clsx from "clsx"
@@ -10,8 +9,12 @@ import {
   ChevronRight, ArrowRight, ShieldCheck, Zap, Star
 } from "lucide-react"
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCart } from '@/hooks/useCart'
+import Skeleton from "@/components/Skeleton"
+import { CardSkeleton } from "@/components/Skeleton"
 import StoreCard from "./StoreCard"
+
 
 const tabs = [
   { id: "ranks", label: "Ranks", Icon: Crown },
@@ -27,7 +30,7 @@ export default function Store() {
   const [productsData, setProductsData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [cart, setCart] = useState([])
+  const { cart, addToCart, removeItem, updateQty, clearCart, itemCount, loadCart } = useCart()
   const [isCartOpen, setIsCartOpen] = useState(false)
   const searchParams = useSearchParams()
 
@@ -37,30 +40,59 @@ export default function Store() {
     if (cat && tabs.some(t => t.id === cat)) setActive(cat)
   }, [searchParams])
 
+  // Force reload cart after checkout navigation
   useEffect(() => {
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('cartItems') : null
-    if (stored) setCart(JSON.parse(stored))
+    loadCart()
   }, [])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('cartItems', JSON.stringify(cart))
-  }, [cart])
+    const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+    const cacheKey = 'store_products'
+    const cachedStr = localStorage.getItem(cacheKey)
+    
+    if (cachedStr) {
+      try {
+        const cached = JSON.parse(cachedStr)
+        if (Date.now() - cached.cachedAt < CACHE_DURATION) {
+          setProductsData(cached.data)
+          setLoading(false)
+          return
+        }
+      } catch (e) {
+        console.log('Cache invalid')
+      }
+    }
 
-  useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name'))
     const unsub = onSnapshot(q,
-      snap => { setProductsData(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false) },
+      snap => { 
+        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setProductsData(data)
+        localStorage.setItem(cacheKey, JSON.stringify({ data, cachedAt: Date.now() }))
+        setLoading(false) 
+      },
       err => { console.error(err); setError('Failed to load products'); setLoading(false) }
     )
     return unsub
   }, [])
 
+
   if (loading) return (
-    <div className="flex items-center justify-center py-32 gap-3 text-slate-400">
-      <Zap size={18} className="animate-pulse text-cyan-400" />
-      <span className="text-sm tracking-widest uppercase font-medium">Loading store…</span>
-    </div>
+    <Skeleton>
+      <section className="max-w-[1300px] mx-auto px-6 py-20">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </section>
+    </Skeleton>
   )
+
+
   if (error) return (
     <div className="text-center py-32 text-red-400 text-sm">{error}</div>
   )
@@ -69,25 +101,7 @@ export default function Store() {
     ? productsData
     : productsData.filter(p => p.cat === active)
 
-  const addToCart = (product) =>
-    setCart(prev => {
-      const ex = prev.find(i => i.id === product.id)
-      return ex
-        ? prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i)
-        : [...prev, { ...product, qty: 1 }]
-    })
-
-  const removeItem = (id) => setCart(prev => prev.filter(i => i.id !== id))
-
-  const updateQty = (id, delta) =>
-    setCart(prev =>
-      prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)
-    )
-
-  const clearCart = () => setCart([])
-
   const subtotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0)
-  const itemCount = cart.reduce((s, i) => s + i.qty, 0)
 
   return (
     <section className="max-w-[1300px] mx-auto px-6 py-20">

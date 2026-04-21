@@ -55,3 +55,8 @@ export const AdminProductsSkeleton = () => (
     <CardSkeleton />
   </div>
 )
+
+export const NavbarSkeleton = () => (
+  <div className="fixed top-0 left-0 right-0 h-[70px] bg-[#030610d9] backdrop-blur-xl border-b border-white/10 z-[100]" />
+)
+
