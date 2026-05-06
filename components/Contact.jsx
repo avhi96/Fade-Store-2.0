@@ -1,4 +1,5 @@
 "use client"
+import { useState } from "react"
 import {
     MessageCircle,
     Mail,
@@ -6,8 +7,11 @@ import {
     Activity,
     Clock
 } from "lucide-react"
+import Dropdown from "./Dropdown"
 
 export default function Contact() {
+    const [topic, setTopic] = useState("")
+    
     return (
         <section className="max-w-[1200px] mx-auto px-6 py-20">
             {/* 🔥 HERO TITLE */}
@@ -141,12 +145,16 @@ export default function Contact() {
                         />
 
                         {/* SELECT */}
-                        <select className="px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-gray-400 focus:border-blue-400 outline-none">
-                            <option>Select a topic...</option>
-                            <option>Support</option>
-                            <option>Purchase Issue</option>
-                            <option>Partnership</option>
-                        </select>
+                        <Dropdown 
+                            options={[
+                                { value: 'support', label: 'Support' },
+                                { value: 'purchase', label: 'Purchase Issue' },
+                                { value: 'partnership', label: 'Partnership' },
+                            ]}
+                            value={topic}
+                            onChange={setTopic}
+                            placeholder="Select a topic..."
+                        />
 
                         {/* MESSAGE */}
                         <textarea

@@ -31,7 +31,7 @@ export default function Checkout() {
   const { data: session } = useSession()
 
   const { cart, clearCart: clearCartItems } = useCart()
-  const [localCart, setLocalCart] = useState([])
+  const [cartReady, setCartReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState("razorpay")
@@ -44,23 +44,31 @@ export default function Checkout() {
   const [orderData, setOrderData] = useState(null)
   const [paymentError, setPaymentError] = useState('')
 
+  // Handle session redirect separately — don't couple it to cart state
   useEffect(() => {
-    if (!session) {
+    if (session === null) {
+      // session=null means unauthenticated (undefined means still loading)
       router.push("/login")
-      return
     }
+  }, [session, router])
 
-    // Prefill saved details
-    if (session.user?.id) {
-      const savedMcName = localStorage.getItem(`mcName_${session.user.id}`)
-      const savedEmail = localStorage.getItem(`email_${session.user.id}`)
-      if (savedMcName) setMcName(savedMcName)
-      if (savedEmail) setEmail(savedEmail)
-    }
+  // Prefill saved details once session is known
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const savedMcName = localStorage.getItem(`mcName_${session.user.id}`)
+    const savedEmail = localStorage.getItem(`email_${session.user.id}`)
+    if (savedMcName) setMcName(savedMcName)
+    if (savedEmail) setEmail(savedEmail)
+  }, [session])
 
-    setLocalCart(cart)
+  // Wait for useCart to hydrate from localStorage before showing the page.
+  // useCart sets its state in a useEffect (after mount), so after the first
+  // re-render triggered by that effect we know the cart is ready.
+  useEffect(() => {
+    if (session === undefined) return // still loading auth
+    setCartReady(true)
     setLoading(false)
-  }, [session, router, cart])
+  }, [cart, session])
 
   // Load payment scripts
   useEffect(() => {

@@ -36,11 +36,9 @@ export function useCart() {
     loadCart()
   }, [loadCart])
 
-// Save on cart change (only if non-empty to avoid checkout page race condition)
+// Save on every cart change (including empty, so removals are persisted)
   useEffect(() => {
-    if (cart.length > 0) {
-      saveCart(cart)
-    }
+    saveCart(cart)
   }, [cart, saveCart])
 
   // Sync from other tabs
