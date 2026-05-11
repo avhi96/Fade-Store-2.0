@@ -101,10 +101,14 @@ export default function ProductDetail() {
       return
     }
 
-    // Temp cart with single item - clear first ensures clean state
+    // Avoid clearCart()+addToCart() timing window that can make checkout
+    // briefly think the cart is empty.
     clearCart()
     addToCart({ ...product, qty: 1 })
-    router.push('/checkout')
+    // Ensure cart/localStorage has been written before navigating.
+    requestAnimationFrame(() => {
+      router.push('/checkout')
+    })
   }
 
   if (loading) {

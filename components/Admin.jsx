@@ -103,8 +103,17 @@ export default function Admin() {
               ) : orders.length === 0 ? (
                 <div className="text-gray-400">No purchases yet</div>
               ) : (
-                recentOrders.map((order) => (
-                  <div key={order.orderId} className="p-3 rounded-lg bg-white/5 border border-white/10">
+                recentOrders.map((order, i) => (
+                  <div
+                    key={
+                      `${order.userId || 'u'}-` +
+                      `${order.orderId || order.orderID || 'noOrder'}-` +
+                      `${order.paymentId || order.payment_id || 'noPayment'}-` +
+                      `${order.product?.id || 'noProduct'}-` +
+                      i
+                    }
+                    className="p-3 rounded-lg bg-white/5 border border-white/10"
+                  >
                     <div className="text-sm text-gray-300">{order.userName || 'Unknown User'}</div>
                     <div className="text-white font-semibold">{order.product?.name || 'Unknown Product'}</div>
                     <div className="text-xs text-gray-400">₹{order.product?.price?.toFixed(2) ?? '0.00'}</div>

@@ -41,8 +41,15 @@ export default function AdminProducts({ isAdmin }) {
     name: '',
     cat: 'ranks',
     icon: '',
+    // Normal money pricing (non-money categories)
     price: 4.99,
     old: 0,
+    // Money category fields (Fade Points redemption)
+    pointsCost: 0,
+    inGameMoneyAmount: 0,
+    redemptionDescription: '',
+    deliveryCommands: '', // stored as textarea; we convert to array on submit
+
     badge: '',
     color: '#63b3ed',
     perks: '',
@@ -50,17 +57,39 @@ export default function AdminProducts({ isAdmin }) {
     imageUrl: ''
   })
 
-  const previewP = useMemo(() => ({
-    name: formData.name,
-    cat: formData.cat,
-    icon: formData.icon || '',
-    price: Number(formData.price),
-    perks: parsePerks(formData.perks),
-    color: formData.color,
-    badge: formData.badge,
-    old: Number(formData.old) || undefined,
-    imageUrl: formData.imageUrl
-  }), [formData])
+  const previewP = useMemo(() => {
+    if (formData.cat === 'money') {
+      return {
+        name: formData.name,
+        cat: formData.cat,
+        icon: formData.icon || '',
+        // UI helpers (optional)
+        pointsCost: Number(formData.pointsCost),
+        inGameMoneyAmount: Number(formData.inGameMoneyAmount),
+        redemptionDescription: formData.redemptionDescription,
+        deliveryCommands: formData.deliveryCommands,
+
+        perks: parsePerks(formData.perks),
+        color: formData.color,
+        badge: formData.badge,
+        old: undefined,
+        price: undefined,
+        imageUrl: formData.imageUrl
+      }
+    }
+
+    return {
+      name: formData.name,
+      cat: formData.cat,
+      icon: formData.icon || '',
+      price: Number(formData.price),
+      perks: parsePerks(formData.perks),
+      color: formData.color,
+      badge: formData.badge,
+      old: Number(formData.old) || undefined,
+      imageUrl: formData.imageUrl
+    }
+  }, [formData])
 
   if (!isAdmin) {
     return (
@@ -110,8 +139,15 @@ export default function AdminProducts({ isAdmin }) {
       name: '',
       cat: 'ranks',
       icon: '',
+      // Normal money pricing (non-money categories)
       price: 4.99,
       old: 0,
+      // Money category fields
+      pointsCost: 0,
+      inGameMoneyAmount: 0,
+      redemptionDescription: '',
+      deliveryCommands: '',
+
       badge: '',
       color: '#63b3ed',
       perks: '',
@@ -119,6 +155,7 @@ export default function AdminProducts({ isAdmin }) {
     })
     setShowModal(true)
   }
+
 
   const openEdit = (p) => {
     setEditId(p.id)
@@ -146,14 +183,34 @@ export default function AdminProducts({ isAdmin }) {
     setSubmitting(true)
 
     try {
+      // Security/scalability: never trust client raw values for numbers.
+      const safePointsCost = Number(formData.pointsCost)
+      const safeInGameMoneyAmount = Number(formData.inGameMoneyAmount)
+
+      const deliveryCommandsArr = String(formData.deliveryCommands)
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+
+      const isMoney = formData.cat === 'money'
+
       const data = {
         ...formData,
         imageUrl: formData.imageUrl || '',
-        price: Number(formData.price),
-        old: Number(formData.old) || null,
         perks: parsePerks(formData.perks),
-        details: formData.details || ''
+        details: formData.details || '',
+
+        // Keep existing fields untouched for non-money products
+        price: isMoney ? null : Number(formData.price),
+        old: isMoney ? null : (Number(formData.old) || null),
+
+        // Money category fields
+        pointsCost: isMoney ? (Number.isFinite(safePointsCost) ? Math.floor(safePointsCost) : 0) : null,
+        inGameMoneyAmount: isMoney ? (Number.isFinite(safeInGameMoneyAmount) ? Math.floor(safeInGameMoneyAmount) : 0) : null,
+        redemptionDescription: isMoney ? String(formData.redemptionDescription || '') : '',
+        deliveryCommands: isMoney ? deliveryCommandsArr : [],
       }
+
 
       if (editId) {
         await updateDoc(doc(db, 'products', editId), data)

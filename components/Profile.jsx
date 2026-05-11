@@ -11,8 +11,9 @@ import {
 
 import { useSession, signOut } from "next-auth/react"
 import { useState, useEffect } from "react"
-import { getUser, getSpendRank } from "@/lib/client-users"
+import { getUser } from "@/lib/client-users"
 import { ADMIN_IDS } from "@/lib/admins"
+import { FADE_RANKS, getFadeRankIndex } from "@/lib/fadePoints"
 
 export default function Profile() {
 
@@ -58,10 +59,47 @@ export default function Profile() {
     )
   }
 
-  const totalSpent = userData ? (userData.totalSpent || []).reduce((sum, s) => sum + s, 0) : 0
   const isAdmin = ADMIN_IDS.includes(session.user.id)
-  const spendRank = getSpendRank(totalSpent)
-  const rankObj = isAdmin ? { name: 'Admin', color: 'from-red-500 to-pink-500' } : spendRank
+
+  const totalSpent = userData
+    ? (() => {
+        // IMPORTANT: derive from verified purchases (checkout currently writes totalSpent per cart-item loop).
+        const purchasesArr = Array.isArray(userData.purchases) ? userData.purchases : []
+        return purchasesArr.reduce((sum, p) => {
+          if (!p?.verified) return sum
+          const sub = Number(p?.subtotal ?? (Number(p?.price || 0) * Number(p?.qty || 1)))
+          return sum + (Number.isFinite(sub) ? sub : 0)
+        }, 0)
+      })()
+    : 0
+
+  const fadeRankIndex = getFadeRankIndex(totalSpent) // 0..5
+  const fadeRankName = FADE_RANKS[fadeRankIndex]?.key ?? 'Member'
+  const fadeRankThreshold = FADE_RANKS[fadeRankIndex]?.threshold ?? 0
+  const nextFadeRank = FADE_RANKS[Math.min(fadeRankIndex + 1, FADE_RANKS.length - 1)]
+  const nextThreshold = nextFadeRank?.threshold ?? fadeRankThreshold
+  const prevThreshold = fadeRankThreshold
+
+  const progressToNext =
+    fadeRankIndex >= FADE_RANKS.length - 1
+      ? 100
+      : nextThreshold === prevThreshold
+        ? 100
+        : Math.max(0, Math.min(100, ((totalSpent - prevThreshold) / (nextThreshold - prevThreshold)) * 100))
+
+  const rankColors = {
+    0: 'from-gray-600 to-gray-400',
+    1: 'from-blue-500 to-cyan-500',
+    2: 'from-gray-400 to-gray-200',
+    3: 'from-amber-500 to-orange-500',
+    4: 'from-indigo-500 to-blue-500',
+    5: 'from-purple-500 to-pink-500',
+  }
+
+  const rankObj = isAdmin
+    ? { name: 'Admin', color: 'from-red-500 to-pink-500', index: null }
+    : { name: fadeRankName, color: rankColors[fadeRankIndex], index: fadeRankIndex }
+
   const user = {
     name: session.user.name,
     avatar: session.user.image,
@@ -105,7 +143,7 @@ export default function Profile() {
       {/* LAYOUT */}
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
 
-        {/* LEFT PANEL */}
+          {/* LEFT PANEL */}
         <div className="p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl text-center">
 
           {/* AVATAR */}
@@ -130,39 +168,38 @@ export default function Profile() {
           <div className="text-gray-400 text-sm mb-4">{user.tag}</div>
 
           {/* RANK */}
-  <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-[0.12em] bg-gradient-to-r ${rankObj.color} text-black mb-6 shadow-lg`}>
+          <div className={`inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-[0.12em] bg-gradient-to-r ${rankObj.color} text-black mb-4 shadow-lg`}>
             {user.rank}
           </div>
 
-          {!isAdmin && rankObj.progress !== undefined && rankObj.progress < 100 && (
+          {/* RANK PROGRESS BAR (fade ranks only) */}
+          {!isAdmin && (
             <div className="mb-6">
-              <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Progress to {rankObj.next ? `next ${getSpendRank(rankObj.next).name}` : 'Max Rank'}</div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <div className="bg-gradient-to-r ${rankObj.color} h-2 rounded-full transition-all" style={{width: `${Math.min(rankObj.progress, 100)}%`}}></div>
+              <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">
+                Progress to {fadeRankIndex >= FADE_RANKS.length - 1 ? 'MAX RANK' : `next ${nextFadeRank?.key ?? ''}`}
               </div>
-              <div className="text-xs text-gray-400 mt-1 text-right">₹{rankObj.next ? rankObj.next - totalSpent : 0} to next</div>
+
+              <div className="w-full bg-gray-700 rounded-full h-2 border border-white/5 overflow-hidden">
+                <div
+                  className={`h-2 rounded-full transition-all bg-gradient-to-r ${rankObj.color}`}
+                  style={{ width: `${progressToNext}%` }}
+                />
+              </div>
+
+              <div className="text-xs text-gray-400 mt-1 text-right">
+                {fadeRankIndex >= FADE_RANKS.length - 1 ? 'Done' : `₹${Math.max(0, nextThreshold - totalSpent).toFixed(0)} to next`}
+              </div>
             </div>
           )}
 
           {/* MINI STATS */}
           <div className="grid grid-cols-2 gap-3 mb-6">
-          <MiniStat label="Spent" value={`₹${totalSpent}`} />
+            <MiniStat label="Spent" value={`₹${totalSpent.toFixed(0)}`} />
             <MiniStat label="Orders" value={orderCount.toString()} />
           </div>
 
-          {/* ACTIONS */}
+          {/* ACTIONS (Logout only) */}
           <div className="flex flex-col gap-3">
-
-            <button className="flex items-center justify-center gap-2 py-2 rounded-lg bg-white/[0.05] border border-white/10 text-gray-300 hover:border-blue-400/40 hover:text-blue-400 transition">
-              <Settings size={16} />
-              Settings
-            </button>
-
-            <button className="flex items-center justify-center gap-2 py-2 rounded-lg bg-white/[0.05] border border-white/10 text-gray-300 hover:border-blue-400/40 hover:text-blue-400 transition">
-              <CreditCard size={16} />
-              Billing
-            </button>
-
             <button
               onClick={() => signOut()}
               className="flex items-center justify-center gap-2 py-2 rounded-lg border border-red-400/20 text-red-400 hover:bg-red-400/10 transition"
@@ -170,7 +207,6 @@ export default function Profile() {
               <LogOut size={16} />
               Logout
             </button>
-
           </div>
 
         </div>
@@ -181,7 +217,7 @@ export default function Profile() {
           {/* POINTS SYSTEM */}
           <div className="p-5 rounded-xl border border-blue-400/20 bg-blue-400/5 backdrop-blur-xl">
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
 
               <div>
                 <div className="text-[0.7rem] uppercase tracking-[0.15em] text-blue-400 mb-1">
@@ -206,9 +242,9 @@ export default function Profile() {
 
           {/* STATS */}
           <div className="grid sm:grid-cols-3 gap-5">
-            <StatCard icon={DollarSign} label="Total Spent" value={`₹${totalSpent}`} />
+            <StatCard icon={DollarSign} label="Total Spent" value={`₹${totalSpent.toFixed(0)}`} />
             <StatCard icon={ShoppingCart} label="Orders" value={orderCount.toString()} />
-            <StatCard icon={User} label="Account Type" value={user.rank} />
+            <StatCard icon={User} label="Account Type" value={isAdmin ? "Admin" : "Player"} />
           </div>
 
           {/* PURCHASE HISTORY */}
@@ -222,9 +258,12 @@ export default function Profile() {
                 Purchase History
               </h3>
 
-              <button className="text-xs text-blue-400 uppercase tracking-[0.1em] hover:underline">
+              <a
+                href="/profile/purchases"
+                className="text-xs text-blue-400 uppercase tracking-[0.1em] hover:underline"
+              >
                 View All
-              </button>
+              </a>
             </div>
 
             <div className="flex flex-col gap-4">

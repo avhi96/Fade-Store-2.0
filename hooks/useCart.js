@@ -5,25 +5,32 @@ import { useState, useEffect, useCallback } from 'react'
 
 export function useCart() {
   const [cart, setCart] = useState([])
+  const [loaded, setLoaded] = useState(false)
 
   // Load from localStorage safely
   const loadCart = useCallback(() => {
     if (typeof window === 'undefined') return
+
     try {
       const stored = localStorage.getItem('cartItems')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        setCart(Array.isArray(parsed) ? parsed : [])
+      if (!stored) {
+        setCart([])
+        return
       }
+
+      const parsed = JSON.parse(stored)
+      setCart(Array.isArray(parsed) ? parsed : [])
     } catch (e) {
       console.warn('Failed to load cart:', e)
       localStorage.removeItem('cartItems')
+      setCart([])
     }
   }, [])
 
   // Save to localStorage
   const saveCart = useCallback((newCart) => {
     if (typeof window === 'undefined') return
+
     try {
       localStorage.setItem('cartItems', JSON.stringify(newCart))
     } catch (e) {
@@ -31,25 +38,28 @@ export function useCart() {
     }
   }, [])
 
-  // Load on mount
+  // Load on mount (hydration guard)
   useEffect(() => {
     loadCart()
+    setLoaded(true)
   }, [loadCart])
 
-// Save on every cart change (including empty, so removals are persisted)
+  // Save only after we loaded once (prevents empty initial state overwriting localStorage)
   useEffect(() => {
+    if (!loaded) return
     saveCart(cart)
-  }, [cart, saveCart])
+  }, [cart, loaded, saveCart])
 
   // Sync from other tabs
   useEffect(() => {
     const handleStorage = (e) => {
-      if (e.key === 'cartItems' && e.newValue) {
+      if (e.key === 'cartItems' && e.newValue !== null) {
         try {
           const parsed = JSON.parse(e.newValue)
           if (Array.isArray(parsed)) setCart(parsed)
+          else setCart([])
         } catch {
-          // invalid, ignore
+          setCart([])
         }
       }
     }
@@ -78,7 +88,7 @@ export function useCart() {
     )
   }, [])
 
-const clearCart = useCallback(() => {
+  const clearCart = useCallback(() => {
     setCart([])
     saveCart([])
     if (typeof window !== 'undefined') {

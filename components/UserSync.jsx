@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
 import { createUser } from '@/lib/users'
+import { ADMIN_IDS } from '@/lib/admins'
 
 export default function UserSync() {
   const { data: session } = useSession()
@@ -10,15 +11,24 @@ export default function UserSync() {
   useEffect(() => {
     if (!session?.user?.discordId) return
 
+    const discordId = session.user.discordId
+    const isAdmin = ADMIN_IDS.includes(discordId)
+
     createUser({
-      id: session.user.discordId,
-      discordId: session.user.discordId,
+      id: discordId,
+      discordId,
       name: session.user.name,
-      email: session.user.email
+      email: session.user.email,
+      // Admin model
+      role: isAdmin ? 'admin' : 'user',
+      isAdmin,
     })
   }, [session?.user?.id])
 
   return null
 }
+
+
+
 
 
