@@ -10,7 +10,13 @@ import {
   BarChart3
 } from "lucide-react"
 import Link from "next/link"
-import { getAllOrders } from '@/lib/orders'
+import {
+  getAllOrders,
+  getOrderAmount,
+  getOrderBuyerName,
+  getOrderProductName,
+  isFadePointsOrder,
+} from '@/lib/orders'
 
 export default function Admin() {
   const [orders, setOrders] = useState([])
@@ -29,9 +35,47 @@ export default function Admin() {
       })
   }, [])
 
-  const totalRevenue = orders.reduce((sum, order) => sum + (order?.product?.price || 0), 0)
+  const totalRevenue = orders.reduce((sum, order) => {
+
+    if (isFadePointsOrder(order)) return sum
+
+    return sum + getOrderAmount(order)
+
+  }, 0)
   const uniqueUsers = new Set(orders.map((o) => o.userId)).size
-  const recentOrders = orders.slice(0, 3)
+  const recentOrders = [...orders]
+    .sort((a, b) => {
+      const normalize = (v) => {
+
+        if (!v) return 0
+
+        // Number timestamp
+        if (typeof v === 'number') {
+          return v
+        }
+
+        // Firestore Timestamp
+        if (typeof v?.toMillis === 'function') {
+          return v.toMillis()
+        }
+
+        // Firestore seconds object
+        if (typeof v?.seconds === 'number') {
+          return v.seconds * 1000
+        }
+
+        // ISO date string
+        if (typeof v === 'string') {
+          const parsed = Date.parse(v)
+          return Number.isFinite(parsed) ? parsed : 0
+        }
+
+        return 0
+      }
+
+      return normalize(b.timestamp) - normalize(a.timestamp)
+    })
+    .slice(0, 4)
 
   const revenueValue = loading ? 'Loading...' : orders.length > 0 ? `₹${totalRevenue.toFixed(2)}` : '0'
   const ordersValue = loading ? 'Loading...' : orders.length > 0 ? orders.length : '0'
@@ -109,52 +153,30 @@ export default function Admin() {
                       `${order.userId || 'u'}-` +
                       `${order.orderId || order.orderID || 'noOrder'}-` +
                       `${order.paymentId || order.payment_id || 'noPayment'}-` +
-                      `${order.product?.id || 'noProduct'}-` +
+                      `${order.items?.[0]?.id || order.product?.id || 'noProduct'}-` +
                       i
                     }
                     className="p-3 rounded-lg bg-white/5 border border-white/10"
                   >
-                    <div className="text-sm text-gray-300">{order.userName || 'Unknown User'}</div>
-                    <div className="text-white font-semibold">{order.product?.name || 'Unknown Product'}</div>
-                    <div className="text-xs text-gray-400">₹{order.product?.price?.toFixed(2) ?? '0.00'}</div>
+                    <div className="text-sm text-gray-300">{getOrderBuyerName(order)}</div>
+                    <div className="text-white font-semibold">{getOrderProductName(order)}</div>
+                    <div className="text-xs text-gray-400">
+
+                      {isFadePointsOrder(order) ? (
+                        <>
+                          {getOrderAmount(order).toFixed(0)} FP
+                        </>
+                      ) : (
+                        <>
+                          ₹{getOrderAmount(order).toFixed(2)}
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
             </div>
-
-
           </div>
-
-          {/* POINTS CONTROL */}
-          <div className="p-6 rounded-2xl border border-blue-400/20 bg-blue-400/5 backdrop-blur-xl">
-
-            <h3
-              className="text-white mb-4"
-              style={{ fontFamily: "Orbitron, monospace", fontWeight: 700 }}
-            >
-              Points System
-            </h3>
-
-            <p className="text-gray-400 text-sm mb-4">
-              Configure how many points users earn per purchase.
-            </p>
-
-            <div className="flex items-center gap-4">
-
-              <input
-                type="number"
-                defaultValue={10}
-                className="w-[80px] p-2 rounded-lg bg-white/[0.05] border border-white/10 text-white outline-none"
-              />
-
-              <span className="text-gray-400 text-sm">
-                points per ₹100 spent
-              </span>
-
-            </div>
-
-          </div>
-
         </div>
 
         {/* RIGHT SIDE */}

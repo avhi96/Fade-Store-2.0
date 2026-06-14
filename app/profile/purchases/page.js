@@ -16,39 +16,181 @@ export default function PurchasesPage() {
   const [userData, setUserData] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Reset on navigation/session change to prevent stale blank state.
   useEffect(() => {
+    setUserData(null)
+    setLoading(true)
+  }, [session?.user?.id])
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setLoading(false)
+      return
+    }
+
+    let didCancel = false
+
     async function load() {
       try {
-        if (!session?.user?.id) return
         const data = await getUser(session.user.id)
-        setUserData(data)
+        if (!didCancel) setUserData(data)
       } finally {
-        setLoading(false)
+        if (!didCancel) setLoading(false)
       }
     }
+
     load()
-  }, [session])
+
+    return () => {
+      didCancel = true
+    }
+  }, [session?.user?.id])
 
   const purchases = useMemo(() => {
     const list = Array.isArray(userData?.purchases) ? userData.purchases : []
+
+    const normalizeTimestampMillis = (value) => {
+      if (!value) return null
+
+      // Firestore Timestamp
+      if (typeof value === 'object' && typeof value.toMillis === 'function') {
+        const ms = value.toMillis()
+        return Number.isFinite(ms) ? ms : null
+      }
+
+      // ISO string or other date-like strings
+      if (typeof value === 'string') {
+        const ms = Date.parse(value)
+        return Number.isFinite(ms) ? ms : null
+      }
+
+      // Number (already millis)
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null
+      }
+
+      // Date instance
+      if (value instanceof Date) {
+        const ms = value.getTime()
+        return Number.isFinite(ms) ? ms : null
+      }
+
+      return null
+    }
+
+    // Deterministic fallback (no Date.now): if a record is missing timestamps,
+    // we still want a stable sort order so newest records don't jump.
+    const getStableFallbackMillis = (p) => {
+      const id = String(
+        p?.id ?? p?.orderId ?? p?.orderID ?? p?.paymentId ?? p?.paymentID ?? p?.name ?? 'p'
+      )
+
+      // Deterministic hash -> pseudo-ms bucket.
+      // Use a fixed base so ordering doesn't depend on render time.
+      let h = 0
+      for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+
+      const FIXED_BASE = 1735689600000 // 2025-01-01T00:00:00Z
+      return FIXED_BASE + (h % 10_000)
+    }
+
+    const normalizePurchaseTimestamp = (p) => {
+      // Keep compatibility with existing records by checking multiple possible fields.
+      const ts = normalizeTimestampMillis(p?.timestamp)
+      const createdAt = normalizeTimestampMillis(p?.createdAt)
+      const fallbackAt = normalizeTimestampMillis(p?.fallbackAt)
+      const updatedAt = normalizeTimestampMillis(p?.updatedAt)
+
+      const sortTs = ts ?? createdAt ?? fallbackAt ?? updatedAt ?? getStableFallbackMillis(p)
+
+      // Prefer original timestamp for display when available; otherwise use the derived sortTs.
+      const displayMs = ts ?? createdAt ?? fallbackAt ?? updatedAt ?? sortTs
+
+      return {
+        sortTs,
+        displayMs
+      }
+    }
+
+
     return list
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        price: Number(p.price || 0),
-        qty: Number(p.qty || 1),
-        subtotal: Number(p.subtotal || (Number(p.price || 0) * Number(p.qty || 1))),
-        timestamp: p.timestamp || null,
-        paymentMethod: p.paymentMethod || p.method || null,
-        orderId: p.orderId || p.orderID || null,
-        paymentId: p.paymentId || null,
-        mcName: p.mcName || null,
-        buyerEmail: p.buyerEmail || null
-      }))
+      .map((p) => {
+        const { sortTs, displayMs } = normalizePurchaseTimestamp(p)
+        const paymentKey = p?.paymentId || p?.paymentID || ''
+        const orderKey = p?.orderId || p?.orderID || ''
+
+        return {
+          id: p.id,
+          name:
+            p.name ||
+            p.title ||
+            p.itemName ||
+            p.productName ||
+            (p.type === 'points_redemption'
+              ? 'Fade Points Redemption'
+              : 'Unknown Purchase'),
+          price: Number(
+            p.price ??
+            p.cost ??
+            p.amount ??
+            0
+          ),
+          qty: Number(p.qty || 1),
+          subtotal: Number(
+            p.subtotal ??
+            p.pointsUsed ??
+            (
+              Number(
+                p.price ??
+                p.cost ??
+                p.amount ??
+                0
+              ) * Number(p.qty || 1)
+            )
+          ),
+          pointsCost: Number(
+            p.pointsCost ??
+            p.pointsUsed ??
+            p.fp ??
+            0
+          ),
+          currency: p.currency || null,
+          type: p.type || null,
+          verified: !!p.verified,
+
+          // Keep existing field for compatibility, but also provide normalized fields.
+          timestamp: p.timestamp || null,
+          createdAt: p.createdAt || null,
+          fallbackAt: p.fallbackAt || null,
+          updatedAt: p.updatedAt || null,
+
+          sortTs,
+          displayTimestamp: displayMs,
+
+          paymentMethod: p.paymentMethod || p.method || null,
+          paymentId: paymentKey || null,
+          orderId: orderKey || null,
+          mcName: p.mcName || null,
+          buyerEmail: p.buyerEmail || null
+        }
+      })
       .sort((a, b) => {
-        const ta = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0
-        const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0
-        return tb - ta
+        // Newest first.
+        const dt = b.sortTs - a.sortTs
+        if (dt !== 0) return dt
+
+        // Stable tie-breakers so ordering doesn't flicker.
+        const aPay = String(a.paymentId || '')
+        const bPay = String(b.paymentId || '')
+        if (aPay !== bPay) return aPay < bPay ? 1 : -1
+
+        const aOrd = String(a.orderId || '')
+        const bOrd = String(b.orderId || '')
+        if (aOrd !== bOrd) return aOrd < bOrd ? 1 : -1
+
+        const aId = String(a.id || '')
+        const bId = String(b.id || '')
+        return aId < bId ? 1 : -1
       })
   }, [userData])
 
@@ -87,10 +229,10 @@ export default function PurchasesPage() {
   const rankObj = isAdmin
     ? { name: 'Admin', color: 'from-red-500 to-pink-500', progress: 100 }
     : {
-        name: fadeRankNames[fadeRankIndex],
-        color: fadeRankColors[fadeRankIndex] || 'from-gray-600 to-gray-400',
-        progress
-      }
+      name: fadeRankNames[fadeRankIndex],
+      color: fadeRankColors[fadeRankIndex] || 'from-gray-600 to-gray-400',
+      progress
+    }
 
 
   const [query, setQuery] = useState('')
@@ -99,6 +241,7 @@ export default function PurchasesPage() {
 
   const filteredPurchases = useMemo(() => {
     const q = query.trim().toLowerCase()
+
 
     let list = purchases
 
@@ -111,10 +254,23 @@ export default function PurchasesPage() {
     }
 
     if (sortMode === 'oldest') {
+      // Oldest first uses the same normalized sortTs we computed above.
+      // Keep it stable and null-safe.
       list = [...list].sort((a, b) => {
-        const ta = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0
-        const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0
-        return ta - tb
+        const dt = a.sortTs - b.sortTs
+        if (dt !== 0) return dt
+
+        const aPay = String(a.paymentId || '')
+        const bPay = String(b.paymentId || '')
+        if (aPay !== bPay) return aPay < bPay ? -1 : 1
+
+        const aOrd = String(a.orderId || '')
+        const bOrd = String(b.orderId || '')
+        if (aOrd !== bOrd) return aOrd < bOrd ? -1 : 1
+
+        const aId = String(a.id || '')
+        const bId = String(b.id || '')
+        return aId < bId ? -1 : 1
       })
     }
 
@@ -210,11 +366,12 @@ export default function PurchasesPage() {
 
         </div>
 
-        {purchases.length === 0 ? (
+        {filteredPurchases.length === 0 ? (
           <div className="text-gray-400 text-sm">No purchases found.</div>
         ) : (
           <div className="space-y-3">
-            {purchases.map((p, i) => (
+            {filteredPurchases.map((p, i) => (
+
               <div
                 key={
                   // Always include index to guarantee uniqueness even if backend data repeats orderId/paymentId
@@ -225,14 +382,31 @@ export default function PurchasesPage() {
                 <div>
                   <div className="text-white font-medium">{p.name}</div>
                   <div className="text-gray-500 text-xs mt-1">
-                    {p.timestamp?.toDate ? p.timestamp.toDate().toLocaleString('en-IN') : (p.timestamp ? String(p.timestamp) : 'Recent')}
+                    {typeof p.displayTimestamp === 'number' && Number.isFinite(p.displayTimestamp) ? (
+                      new Date(p.displayTimestamp).toLocaleString('en-IN')
+                    ) : (
+                      'Recent'
+                    )}
                   </div>
                   <div className="text-gray-400 text-xs mt-2">Qty: {p.qty}</div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-blue-400 font-bold">₹{p.subtotal.toFixed(2)}</div>
-                  <div className="text-gray-500 text-xs mt-1">Item: ₹{p.price.toFixed(2)}</div>
+                  {p.currency === 'FP' || p.type === 'points_redemption' ? (
+                    <>
+                      <div className="text-blue-400 font-bold">{Number(p.pointsCost ?? p.subtotal ?? 0).toFixed(0)} FP</div>
+                      <div className="text-gray-500 text-xs mt-1">Item: {Number(p.pointsCost ?? p.subtotal ?? 0).toFixed(0)} FP</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-blue-400 font-bold">
+                        ₹{Number(p.subtotal || 0).toFixed(2)}
+                      </div>
+                      <div className="text-gray-500 text-xs mt-1">
+                        Item: ₹{Number(p.price || 0).toFixed(2)}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ))}

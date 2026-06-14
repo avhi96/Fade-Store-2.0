@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, orderBy } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import clsx from "clsx"
 import {
@@ -34,6 +34,7 @@ export default function Store() {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const searchParams = useSearchParams()
 
+
   useEffect(() => {
     if (searchParams?.get('openCart') === '1') setIsCartOpen(true)
     const cat = searchParams?.get('category')
@@ -46,36 +47,73 @@ export default function Store() {
   }, [])
 
   useEffect(() => {
-    const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
-    const cacheKey = 'store_products'
-    const cachedStr = localStorage.getItem(cacheKey)
-    
-    if (cachedStr) {
+
+    const fetchProducts = async () => {
+
       try {
-        const cached = JSON.parse(cachedStr)
-        if (Date.now() - cached.cachedAt < CACHE_DURATION) {
-          setProductsData(cached.data)
-          setLoading(false)
-          return
+
+        const CACHE_DURATION = 5 * 60 * 1000
+        const cacheKey = 'store_products'
+
+        const cachedStr = localStorage.getItem(cacheKey)
+
+        if (cachedStr) {
+
+          try {
+
+            const cached = JSON.parse(cachedStr)
+
+            if (Date.now() - cached.cachedAt < CACHE_DURATION) {
+
+              setProductsData(cached.data)
+              setLoading(false)
+
+              return
+            }
+
+          } catch (e) {
+
+            console.log('Cache invalid')
+          }
         }
-      } catch (e) {
-        console.log('Cache invalid')
+
+        const q = query(
+          collection(db, 'products'),
+          orderBy('name')
+        )
+
+        const snap = await getDocs(q)
+
+        const data = snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+
+        setProductsData(data)
+
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            data,
+            cachedAt: Date.now()
+          })
+        )
+
+        setLoading(false)
+
+      } catch (err) {
+
+        console.error(err)
+
+        setError('Failed to load products')
+
+        setLoading(false)
       }
     }
 
-    const q = query(collection(db, 'products'), orderBy('name'))
-    const unsub = onSnapshot(q,
-      snap => { 
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        setProductsData(data)
-        localStorage.setItem(cacheKey, JSON.stringify({ data, cachedAt: Date.now() }))
-        setLoading(false) 
-      },
-      err => { console.error(err); setError('Failed to load products'); setLoading(false) }
-    )
-    return unsub
-  }, [])
+    fetchProducts()
 
+  }, [])
 
   if (loading) return (
     <Skeleton>
@@ -101,7 +139,20 @@ export default function Store() {
     ? productsData
     : productsData.filter(p => p.cat === active)
 
-  const subtotal = cart.reduce((s, i) => s + Number(i.price || 0) * i.qty, 0)
+  const subtotal = cart.reduce((s, i) => {
+
+    if (i?.cat === 'money') {
+      return s + (Number(i.pointsCost || 0) * i.qty)
+    }
+
+    return s + (Number(i.price || 0) * i.qty)
+
+  }, 0)
+  const hasMoneyItems = cart.some(i => i?.cat === 'money')
+
+  const hasNormalItems = cart.some(i => i?.cat !== 'money')
+
+  const isMixedCart = hasMoneyItems && hasNormalItems
 
   return (
     <section className="max-w-[1300px] mx-auto px-6 py-20">
@@ -311,7 +362,12 @@ export default function Store() {
                 <div className="space-y-2 mb-5">
                   <div className="flex justify-between text-slate-400 text-xs">
                     <span>Subtotal ({itemCount} items)</span>
-                    <span>{fmt(subtotal)}</span>
+                    <span>
+                      {hasMoneyItems && !hasNormalItems
+                        ? `${subtotal.toLocaleString()} FP`
+                        : fmt(subtotal)
+                      }
+                    </span>
                   </div>
                   <div className="flex justify-between text-slate-400 text-xs">
                     <span>Platform fee</span>
@@ -329,27 +385,59 @@ export default function Store() {
                       className="text-xl"
                       style={{ fontFamily: "Orbitron, monospace" }}
                     >
-                      {fmt(subtotal)}
+                      {hasMoneyItems && !hasNormalItems
+                        ? `${subtotal.toLocaleString()} FP`
+                        : fmt(subtotal)
+                      }
                     </span>
                   </div>
                 </div>
 
+                {isMixedCart && (
+                  <div className="mb-4 p-4 rounded-xl border border-red-500/30 bg-red-500/10">
+
+                    <div className="text-red-300 font-semibold text-sm">
+                      Mixed cart not supported
+                    </div>
+
+                    <div className="text-xs text-red-200/80 mt-1">
+                      Fade Point products must be redeemed separately from normal purchases.
+                    </div>
+
+                  </div>
+                )}
+
                 {/* CTA */}
-                <Link href="/checkout">
+                <Link href={isMixedCart ? '#' : '/checkout'}>
                   <button
-                    className="group w-full py-4 px-6 rounded-2xl relative overflow-hidden
-                             bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500
-                             text-white font-black text-xs tracking-widest uppercase
-                             shadow-[0_4px_32px_rgba(34,211,238,0.28)]
-                             hover:shadow-[0_4px_44px_rgba(34,211,238,0.5)]
-                             active:scale-[0.98] transition-all duration-200 border border-white/20"
+                    disabled={isMixedCart}
+                    className={`group w-full py-4 px-6 rounded-2xl relative overflow-hidden
+    text-white font-black text-xs tracking-widest uppercase
+    transition-all duration-200 border border-white/20
+    ${isMixedCart
+                        ? 'bg-red-500/20 text-red-200 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 shadow-[0_4px_32px_rgba(34,211,238,0.28)] hover:shadow-[0_4px_44px_rgba(34,211,238,0.5)] active:scale-[0.98]'
+                      }`}
                     style={{ fontFamily: "Orbitron, monospace" }}
                   >
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      Checkout
-                      <ChevronRight size={15} className="group-hover:translate-x-1 transition-transform duration-150" />
+
+                      {isMixedCart
+                        ? 'Separate FP & Normal Items'
+                        : 'Checkout'}
+
+                      {!isMixedCart && (
+                        <ChevronRight
+                          size={15}
+                          className="group-hover:translate-x-1 transition-transform duration-150"
+                        />
+                      )}
+
                     </span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    {!isMixedCart && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    )}
                   </button>
                 </Link>
 
@@ -411,7 +499,19 @@ function CartItem({ item, index, onRemove, onQty }) {
           >
             {item.name}
           </h4>
-          <p className="text-slate-500 text-[0.68rem] mt-0.5">{fmt(item.price)} each</p>
+          <p className="text-slate-500 text-[0.68rem] mt-0.5">
+
+            {item?.cat === 'money' ? (
+              <>
+                {Number(item.pointsCost || 0).toLocaleString()} FP each
+              </>
+            ) : (
+              <>
+                {fmt(item.price)} each
+              </>
+            )}
+
+          </p>
         </div>
 
         {/* remove — visible on hover */}
@@ -444,10 +544,15 @@ function CartItem({ item, index, onRemove, onQty }) {
             {item.qty}
           </span>
           <button
-            onClick={() => onQty(item.id, 1)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg
-                       bg-cyan-500/15 hover:bg-cyan-500/35 text-cyan-400
-                       transition-all active:scale-90"
+            onClick={() => {
+              if (item.qty >= 5) return
+              onQty(item.id, 1)
+            }}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg
+           transition-all active:scale-90 ${item.qty >= 5
+                ? 'bg-white/5 text-gray-600 cursor-not-allowed'
+                : 'bg-cyan-500/15 hover:bg-cyan-500/35 text-cyan-400'
+              }`}
           >
             <Plus size={11} />
           </button>
@@ -457,7 +562,10 @@ function CartItem({ item, index, onRemove, onQty }) {
           className="text-white font-black text-sm"
           style={{ fontFamily: "Orbitron, monospace" }}
         >
-          {fmt(item.price * item.qty)}
+          {item?.cat === 'money'
+            ? `${Number((item.pointsCost || 0) * item.qty).toLocaleString()} FP`
+            : fmt(item.price * item.qty)
+          }
         </span>
       </div>
     </div>

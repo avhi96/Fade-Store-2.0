@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react"
 import { usePathname } from "next/navigation"
 import clsx from "clsx"
 import Link from "next/link"
+import { Gift } from "lucide-react"
 import { ADMIN_IDS } from '@/lib/admins'
 
 const navItems = [
@@ -77,10 +78,16 @@ export default function Navbar() {
               {session?.user && ADMIN_IDS.includes(session.user.discordId) && (
                 <Link href="/admin">
                   <button className="px-5 py-2 rounded-lg text-orange-400 border border-orange-400/30 bg-orange-400/10 hover:bg-orange-400/20 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer">
-                     Admin
+                    Admin
                   </button>
                 </Link>
               )}
+              <Link href="/redeem">
+                <button className="px-5 py-2 rounded-lg text-cyan-300 border border-cyan-400/20 bg-cyan-400/5 hover:text-cyan-200 hover:border-cyan-400 hover:bg-cyan-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer flex items-center gap-2">
+                  <Gift size={15} />
+                  Redeem
+                </button>
+              </Link>
               <Link href="/profile">
                 <button className="px-5 py-2 rounded-lg text-gray-400 border border-white/10 bg-white/5 hover:text-blue-400 hover:border-blue-400 hover:bg-blue-400/10 transition font-[var(--font-body)] text-[0.85rem] font-bold tracking-[0.06em] uppercase cursor-pointer relative">
                   ⬡ Profile
@@ -133,7 +140,7 @@ export default function Navbar() {
           {/* ACTIONS */}
           <div className="mt-6 flex flex-col gap-4 w-50">
 
-          {!session ? (
+            {!session ? (
               <Link href="/login">
                 <button className="w-full py-3 rounded-lg bg-[#5865F2] text-white uppercase font-bold">
                   Login with Discord
@@ -141,6 +148,12 @@ export default function Navbar() {
               </Link>
             ) : (
               <>
+                <Link href="/redeem">
+                  <button className="w-full py-3 font-bold rounded-lg border border-cyan-400/20 bg-cyan-400/5 text-cyan-300 uppercase flex items-center justify-center gap-2">
+                    <Gift size={16} />
+                    Redeem
+                  </button>
+                </Link>
                 <Link href="/profile">
                   <button className="w-full py-3 font-bold rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase relative">
                     Profile

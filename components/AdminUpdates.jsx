@@ -75,14 +75,20 @@ export default function AdminUpdates({ isAdmin }) {
       setShowModal(false)
       getStoreUpdates().then(setUpdates)
     } else {
-      alert('Error saving update')
+      alert('Error saving update. Check that you are signed in as an admin.')
     }
   }
 
   const handleDelete = async (id) => {
     if (confirm('Delete this update?')) {
-      await deleteUpdate(id)
-      getStoreUpdates().then(setUpdates)
+      const success =
+        await deleteUpdate(id)
+
+      if (success) {
+        getStoreUpdates().then(setUpdates)
+      } else {
+        alert('Error deleting update. Check that you are signed in as an admin.')
+      }
     }
   }
 
@@ -185,15 +191,61 @@ export default function AdminUpdates({ isAdmin }) {
                 required
               />
               <select
-                className='w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm outline-none focus:border-blue-400/40 transition'
+                className='
+    w-full
+    px-3
+    py-2
+    rounded-lg
+    bg-[#111827]
+    border
+    border-white/10
+    text-white
+    text-sm
+    outline-none
+    focus:border-blue-400/40
+    transition
+    appearance-none
+  '
+                style={{
+                  backgroundColor: '#111827',
+                  color: 'white',
+                }}
                 value={formData.type}
                 onChange={(e) =>
                   setFormData({ ...formData, type: e.target.value })
                 }
               >
-                <option value='announcement'>Announcement</option>
-                <option value='patch'>Patch</option>
-                <option value='event'>Event</option>
+
+                <option
+                  value='announcement'
+                  style={{
+                    backgroundColor: '#111827',
+                    color: 'white',
+                  }}
+                >
+                  Announcement
+                </option>
+
+                <option
+                  value='patch'
+                  style={{
+                    backgroundColor: '#111827',
+                    color: 'white',
+                  }}
+                >
+                  Patch
+                </option>
+
+                <option
+                  value='event'
+                  style={{
+                    backgroundColor: '#111827',
+                    color: 'white',
+                  }}
+                >
+                  Event
+                </option>
+
               </select>
               <textarea
                 className='w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-white text-sm outline-none focus:border-blue-400/40 transition min-h-[100px]'
@@ -214,4 +266,3 @@ export default function AdminUpdates({ isAdmin }) {
     </section>
   )
 }
-

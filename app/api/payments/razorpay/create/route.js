@@ -8,7 +8,27 @@ const razorpay = new Razorpay({
 
 export async function POST(request) {
   try {
-    const { amount, currency = 'INR', mcName, email, orderId, paymentMethod } = await request.json()
+    const {
+
+      amount,
+
+      currency = 'INR',
+
+      mcName,
+
+      email,
+
+      orderId,
+
+      paymentMethod,
+
+      userId,
+
+      cartSnapshot,
+
+      snapshotTotal,
+
+    } = await request.json()
 
     if (!amount || amount <= 0) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
@@ -19,9 +39,22 @@ export async function POST(request) {
       currency,
       receipt: orderId || `order_${Date.now()}`,
       notes: {
+
+        userId,
+
         mcName,
+
         email,
+
         paymentMethod,
+
+        cartSnapshot:
+          JSON.stringify(
+            cartSnapshot || []
+          ),
+
+        snapshotTotal:
+          String(snapshotTotal || 0),
       }
     })
 

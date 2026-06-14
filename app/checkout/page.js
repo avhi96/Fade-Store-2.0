@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { useCart } from "@/hooks/useCart"
+import { getUser } from "@/lib/client-users"
 import {
   ArrowLeft,
   ShoppingCart,
@@ -16,13 +17,6 @@ import {
   XCircle
 } from "lucide-react"
 
-import { db } from "@/lib/firebase"
-import { 
-  doc, 
-  updateDoc, 
-  arrayUnion, 
-  serverTimestamp 
-} from "firebase/firestore"
 
 
 
@@ -45,10 +39,13 @@ export default function Checkout() {
   const [promoCode, setPromoCode] = useState("")
   const [promoApplied, setPromoApplied] = useState(false)
   const [promoError, setPromoError] = useState("")
+  const [promoDiscount, setPromoDiscount] = useState(0)
 
   const [scriptsLoaded, setScriptsLoaded] = useState({ razorpay: false, cashfree: false })
   const [orderData, setOrderData] = useState(null)
   const [paymentError, setPaymentError] = useState('')
+
+  const [userData, setUserData] = useState(null)
 
   // Handle session redirect separately — don't couple it to cart state
   useEffect(() => {
@@ -57,6 +54,17 @@ export default function Checkout() {
       router.push("/login")
     }
   }, [session, router])
+
+  useEffect(() => {
+    async function loadUser() {
+      if (!session?.user?.id) return
+
+      const data = await getUser(session.user.id)
+      setUserData(data)
+    }
+
+    loadUser()
+  }, [session])
 
   // Prefill saved details once session is known
   useEffect(() => {
@@ -105,7 +113,18 @@ export default function Checkout() {
   // Load payment scripts
   useEffect(() => {
     const loadScript = (src, key) => {
-      if (scriptsLoaded[key]) return
+      const existing =
+        document.querySelector(
+          `script[src="${src}"]`
+        )
+
+      if (existing) {
+        setScriptsLoaded(prev => ({
+          ...prev,
+          [key]: true,
+        }))
+        return
+      }
 
       const script = document.createElement('script')
       script.src = src
@@ -116,13 +135,28 @@ export default function Checkout() {
     }
 
     loadScript('https://checkout.razorpay.com/v1/checkout.js', 'razorpay')
-    loadScript('https://sdk.cashfree.com/js/v1/cashfree.js', 'cashfree')
+    loadScript('https://sdk.cashfree.com/js/v3/cashfree.js', 'cashfree')
   }, [])
 
   // Guard: sometimes `cart` can briefly be empty/undefined during hydration.
   // Keep summary stable by normalizing to an array.
   const safeCart = Array.isArray(cart) ? cart : []
   const total = safeCart.reduce((sum, i) => sum + Number(i.price) * i.qty, 0)
+
+  const cartIsMoneyOnly = safeCart.length > 0 && safeCart.every((it) => it?.cat === 'money')
+
+  const totalPointsRequired = safeCart.reduce((sum, item) => {
+    if (item?.cat !== 'money') return sum
+
+    const qty = Number(item.qty ?? 1)
+    const pointsCost = Number(item.pointsCost ?? 0)
+
+    return sum + (pointsCost * qty)
+  }, 0)
+
+  const userPoints = Number(userData?.points || 0)
+
+  const hasEnoughPoints = userPoints >= totalPointsRequired
 
   const validate = () => {
     if (!mcName.trim()) return "Minecraft username is required"
@@ -139,16 +173,80 @@ export default function Checkout() {
     }
 
     if (!safeCart.length || !session?.user?.id) {
-      setError("No items or login required")
+      setError('No items or login required')
       return
     }
 
-    // IMPORTANT: take a stable snapshot so gateway callbacks can't race with cart clearing
+    // IMPORTANT: take a stable snapshot so callbacks can't race with cart clearing
     const cartSnapshot = safeCart.map((item) => ({ ...item }))
+
+    const isMoneyOnly = cartSnapshot.every((it) => it?.cat === 'money')
+
+    // ---- Fade Points redemption flow ----
+    if (isMoneyOnly) {
+
+      setProcessing(true)
+      setError('')
+      setPaymentError('')
+
+      try {
+        const redemptionRes = await fetch('/api/redemptions/fade-points', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cart: cartSnapshot,
+            mcName,
+            buyerEmail: email || '',
+            // stable idempotency per checkout attempt so re-renders don't create new server requests
+            idempotencyKey: `${session.user.id}-${mcName}-${cartSnapshot.map(i => i.id || i.productId).join(',')}`,
+          }),
+        })
+
+        const data = await redemptionRes.json()
+
+        if (!redemptionRes.ok || !data.success) {
+          throw new Error(data?.error || 'Redemption failed')
+        }
+
+        if (promoApplied && promoCode.trim()) {
+
+          await fetch('/api/promos/use', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              code: promoCode.trim().toUpperCase(),
+              userId: session.user.id,
+            }),
+          })
+        }
+
+        clearCartItems()
+
+        // redirect to success page
+        router.push(
+          `/checkout/result?status=success&method=fade-points&redemptionId=${encodeURIComponent(
+            data?.redemptionId || ''
+          )}&totalPointsCost=${encodeURIComponent(String(data?.totalPointsCost ?? 0))}&mcName=${encodeURIComponent(
+            mcName
+          )}`
+        )
+      } catch (e) {
+        console.error('Redemption error:', e)
+        setPaymentError(e?.message || 'Redemption failed')
+      } finally {
+        setProcessing(false)
+      }
+
+      return
+    }
+
+    // ---- Normal gateway flow (existing) ----
     const snapshotTotal = cartSnapshot.reduce((sum, i) => sum + Number(i.price) * i.qty, 0)
 
     // Promo (temporary client-side 10% discount; real validation later)
-    const discount = promoApplied ? snapshotTotal * 0.1 : 0
+    const discount = promoDiscount
     const payableTotal = Math.max(0, snapshotTotal - discount)
 
     setProcessing(true)
@@ -162,18 +260,29 @@ export default function Checkout() {
       const createRes = await fetch(`/api/payments/${paymentMethod}/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
+
           amount: payableTotal,
+
           currency: 'INR',
+
           mcName,
+
           email: email || '',
+
           orderId,
-          paymentMethod 
-        })
+
+          paymentMethod,
+
+          userId: session.user.id,
+
+          cartSnapshot,
+
+          snapshotTotal,
+        }),
       })
 
       const orderData = await createRes.json()
-
 
       if (!createRes.ok || orderData.error) {
         throw new Error(orderData.error || 'Failed to create order')
@@ -181,14 +290,39 @@ export default function Checkout() {
 
       // Open gateway SDK (common handler)
       if (paymentMethod === 'razorpay') {
-        if (!window.Razorpay) throw new Error('Razorpay SDK not loaded')
+        if (!window.Razorpay) {
+
+          await new Promise((resolve, reject) => {
+
+            const existing = document.querySelector(
+              'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+            )
+
+            if (existing && window.Razorpay) {
+              resolve(true)
+              return
+            }
+
+            const script = document.createElement('script')
+
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+
+            script.onload = () => resolve(true)
+
+            script.onerror = () => reject(
+              new Error('Failed to load Razorpay SDK')
+            )
+
+            document.body.appendChild(script)
+          })
+        }
 
         const options = {
           key: orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: orderData.amount,
           currency: orderData.currency,
           order_id: orderData.orderId,
-          name: 'Fade Web Store',
+          name: 'Fade Store',
           description: `Purchase for ${mcName}`,
           image: '/FadeIcon.png',
           handler: async function (response) {
@@ -202,46 +336,69 @@ export default function Checkout() {
           },
           prefill: {
             name: mcName,
-            email: email || ''
+            email: email || '',
           },
           theme: {
             color: '#1e293b', // slate-800 dark
-            backdropColor: '#0f172a' // slate-900
+            backdropColor: '#0f172a', // slate-900
           },
           modal: {
-            ondismiss: () => setProcessing(false)
-          }
+            ondismiss: () => setProcessing(false),
+          },
         }
 
         const rzp = new window.Razorpay(options)
         rzp.open()
-
       } else if (paymentMethod === 'cashfree') {
-        if (!window.CashFree) throw new Error('Cashfree SDK not loaded')
-        
-        window.CashFree.initiateAndLaunchCF(
-          orderData.cf_session_id || orderData.sessionId, // from API
-          {
-            components: ['RZP'],
-            onSuccess: async (data) => {
-              await verifyPayment('cashfree', data, {mcName, email, orderId, total: snapshotTotal}, cartSnapshot, snapshotTotal)
-            },
-            onError: (err) => {
-              console.error('Cashfree error:', err)
-              setPaymentError('Payment failed')
-              setProcessing(false)
-            }
-          },
-          {
-            theme: {
-              primary: '#1e293b',
-              secondary: '#334155',
-              background: '#0f172a'
-            }
-          }
-        )
-      }
 
+        if (!window.Cashfree) {
+          throw new Error('Cashfree SDK not loaded')
+        }
+
+        const cashfree = window.Cashfree({
+          mode: 'sandbox',
+        })
+
+        const result = await cashfree.checkout({
+          paymentSessionId: orderData.payment_session_id,
+          redirectTarget: '_modal',
+
+          appearance: {
+            width: '425px',
+            height: '700px',
+          },
+
+          theme: {
+            color: '#1e293b',
+          },
+        })
+
+        console.log('Cashfree Result:', result)
+
+        // SUCCESS
+        if (result?.error == null) {
+
+          await verifyPayment(
+            'cashfree',
+            {
+              order_id: orderData.order_id,
+            },
+            {
+              mcName,
+              email,
+              orderId,
+              total: snapshotTotal
+            },
+            cartSnapshot,
+            snapshotTotal
+          )
+
+        } else {
+
+          setPaymentError(result.error.message || 'Payment failed')
+          setProcessing(false)
+        }
+      }
     } catch (err) {
       console.error('Checkout error:', err)
       setError(err.message || 'Payment initiation failed')
@@ -249,12 +406,24 @@ export default function Checkout() {
     }
   }
 
+
   const verifyPayment = async (gateway, paymentData, orderDetails, cartSnapshot, snapshotTotal) => {
     try {
       const verifyRes = await fetch(`/api/payments/${gateway}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...paymentData, ...orderDetails })
+        body: JSON.stringify({
+
+          ...paymentData,
+
+          ...orderDetails,
+
+          userId: session.user.id,
+
+          cartSnapshot,
+
+          snapshotTotal,
+        })
       })
 
       const verifyData = await verifyRes.json()
@@ -263,101 +432,51 @@ export default function Checkout() {
         throw new Error(verifyData.error || 'Payment verification failed')
       }
 
-      // NOW update Firebase (secure, after verify)
-      const orderId = orderDetails.orderId
-      const orderSubtotal = snapshotTotal
-      const paymentId = paymentData.razorpay_payment_id || paymentData.txId || ''
+      if (promoApplied && promoCode.trim()) {
+        const promoUseRes =
+          await fetch('/api/promos/use', {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              code:
+                promoCode.trim().toUpperCase(),
+              userId:
+                session.user.id,
+            }),
+          })
 
-      // ---- Load user for points/rank calc + idempotency ----
-      const userRef = doc(db, 'users', session.user.id)
-      const userSnap = await (await import('firebase/firestore')).getDoc(userRef)
-      const userData = userSnap.exists() ? userSnap.data() : {}
-
-      const purchasesArr = Array.isArray(userData?.purchases) ? userData.purchases : []
-
-      // Idempotency: if this payment/order was already saved, don't award points again.
-      const alreadyProcessed = purchasesArr.some((p) => {
-        const pOrderId = p?.orderId || p?.orderID
-        const pPaymentId = p?.paymentId || p?.payment_id
-        return (orderId && pOrderId === orderId) || (paymentId && pPaymentId === paymentId)
-      })
-
-      // Sum only verified purchases to represent previous spend
-      const prevVerifiedSpend = purchasesArr.reduce((sum, p) => {
-        if (!p?.verified) return sum
-        const sub = Number(p?.subtotal ?? (Number(p?.price || 0) * Number(p?.qty || 1)))
-        return sum + (Number.isFinite(sub) ? sub : 0)
-      }, 0)
-
-      // New total spend after this order
-      const newVerifiedSpend = prevVerifiedSpend + orderSubtotal
-
-      // ---- Points calc with monthly spending cap ----
-      const {
-        calcEarnedPointsBetweenBuckets,
-        getMonthlyCapDefault,
-        getUTCMonthKey,
-      } = await import('@/lib/fadePoints')
-
-      const earnedNowRaw = calcEarnedPointsBetweenBuckets({
-        prevTotalSpent: prevVerifiedSpend,
-        newTotalSpent: newVerifiedSpend,
-        // cap handled below
-      })
-
-      const monthKey = getUTCMonthKey(new Date())
-      const monthlyCap = getMonthlyCapDefault() // points cap per month
-      const prevMonthPoints = Number(userData?.monthlyPoints?.[monthKey] || 0)
-      const remaining = Math.max(0, monthlyCap - prevMonthPoints)
-      const earnedNowCapped = Math.min(earnedNowRaw, remaining)
-
-      // Current points stored
-      const prevPoints = Number(userData?.points || 0)
-      const newPoints = prevPoints + (alreadyProcessed ? 0 : earnedNowCapped)
-
-      // ---- Save purchases (always) ----
-      for (const item of cartSnapshot) {
-        await updateDoc(userRef, {
-          purchases: arrayUnion({
-            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            productId: item.id,
-            ...item,
-            mcName: orderDetails.mcName,
-            buyerEmail: orderDetails.email || '',
-            paymentMethod: gateway,
-            orderId,
-            paymentId,
-            subtotal: item.price * item.qty,
-            verified: true
-          }),
-          totalSpent: arrayUnion(orderSubtotal),
-          updatedAt: serverTimestamp()
-        })
-      }
-
-      // ---- Award points + update monthly cap tracking (only once) ----
-      if (!alreadyProcessed && earnedNowCapped > 0) {
-        await updateDoc(userRef, {
-          points: newPoints,
-          monthlyPoints: {
-            ...(userData?.monthlyPoints || {}),
-            [monthKey]: prevMonthPoints + earnedNowCapped
-          },
-          updatedAt: serverTimestamp()
-        })
+        if (!promoUseRes.ok) {
+          console.warn(
+            'Promo usage was not recorded'
+          )
+        }
       }
 
       clearCartItems()
 
-      // Clear local form data only (keep Firebase data intact)
       if (session.user?.id) {
         localStorage.removeItem(`mcName_${session.user.id}`)
-        localStorage.removeItem(`email_${session.user.id}`)
+
+        localStorage.removeItem(
+          `email_${session.user.id}`
+        )
+
         setMcName('')
         setEmail('')
       }
 
-      router.push(`/checkout/result?status=success&orderId=${orderId}&mcName=${encodeURIComponent(orderDetails.mcName)}&method=${gateway}&total=${snapshotTotal}`)
+
+      router.push(
+
+        `/checkout/result?status=success&orderId=${verifyData.orderId || orderDetails.orderId
+        }&mcName=${encodeURIComponent(
+          orderDetails.mcName
+        )}&method=${gateway}&total=${snapshotTotal}&earnedPoints=${verifyData.earnedPoints || 0
+        }`
+      )
 
     } catch (err) {
       console.error('Verify error:', err)
@@ -406,6 +525,7 @@ export default function Checkout() {
           <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6">
             <h2 className="text-lg font-bold mb-4 tracking-wide">Player Details</h2>
 
+
             <div className="mb-4">
               <label className="text-xs text-gray-400 uppercase">Minecraft Username *</label>
               <div className="flex items-center gap-3 mt-2 p-3 rounded-lg bg-white/5 border border-white/10 focus-within:border-blue-500">
@@ -440,24 +560,44 @@ export default function Checkout() {
             <h2 className="text-lg font-bold mb-4">Order Summary</h2>
 
             <div className="space-y-3">
-              {safeCart.map((item, index) => (
-                <div
-                  key={item.id || item.productId || index}
-                  className="p-3 bg-white/5 border border-white/10 rounded-lg mb-2 last:mb-0 hover:bg-white/10 transition-all"
-                >
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="font-medium">
-                      {(item.name || item.title || "Unknown Item")} × {(item.qty || item.quantity || 1)}
-                    </span>
-                    <span className="font-bold text-blue-400">
-                      ₹{(
-                        Number(item.price ?? item.cost ?? 0) *
-                        Number(item.qty ?? item.quantity ?? 1)
-                      ).toFixed(2)}
-                    </span>
+              {safeCart.map((item, index) => {
+                const qty = Number(item.qty ?? item.quantity ?? 1)
+                if (item?.cat === 'money') {
+                  const linePoints = Number(item.pointsCost ?? 0) * qty
+                  return (
+                    <div
+                      key={item.id || item.productId || index}
+                      className="p-3 bg-white/5 border border-white/10 rounded-lg mb-2 last:mb-0 hover:bg-white/10 transition-all"
+                    >
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">
+                          {(item.name || item.title || 'Unknown Item')} × {qty}
+                        </span>
+                        <span className="font-bold text-cyan-300">
+                          {linePoints} Fade Points
+                        </span>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div
+                    key={item.id || item.productId || index}
+                    className="p-3 bg-white/5 border border-white/10 rounded-lg mb-2 last:mb-0 hover:bg-white/10 transition-all"
+                  >
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="font-medium">
+                        {(item.name || item.title || 'Unknown Item')} × {qty}
+                      </span>
+                      <span className="font-bold text-blue-400">
+                        ₹{(Number(item.price ?? item.cost ?? 0) * qty).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
+
             </div>
           </div>
         </div>
@@ -466,27 +606,53 @@ export default function Checkout() {
         <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6">
           <h2 className="text-lg font-bold mb-6">Payment</h2>
 
-          <div className="space-y-3 mb-6">
-            {["razorpay", "cashfree"].map((method) => (
-              <div
-                key={method}
-                onClick={() => setPaymentMethod(method)}
-                className={`p-4 rounded-xl cursor-pointer border transition flex items-center gap-3 ${
-                  paymentMethod === method
+          {!cartIsMoneyOnly ? (
+            <div className="space-y-3 mb-6">
+              {[
+                "razorpay",
+                "cashfree"
+              ].map((method) => (
+                <div
+                  key={method}
+                  onClick={() => setPaymentMethod(method)}
+                  className={`p-4 rounded-xl cursor-pointer border transition flex items-center gap-3 ${paymentMethod === method
                     ? "border-blue-500 bg-blue-500/10"
                     : "border-white/10 hover:border-blue-400/40"
-                }`}
-              >
-                <CreditCard size={16} />
+                    }`}
+                >
+                  <CreditCard size={16} />
+                  <div>
+                    <p className="text-sm font-semibold capitalize">{method}</p>
+                    <p className="text-xs text-gray-400">
+                      {method === "razorpay" ? "UPI / Cards" : "Banking / EMI"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-6 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
+              <div className="flex items-start justify-between gap-4 mb-2">
                 <div>
-                  <p className="text-sm font-semibold capitalize">{method}</p>
-                  <p className="text-xs text-gray-400">
-                    {method === "razorpay" ? "UPI / Cards" : "Banking / EMI"}
-                  </p>
+                  <h3 className="font-bold text-sm">Redeem with Fade Points</h3>
+                  <p className="text-xs text-gray-400 mt-1">Points will be deducted instantly (money-only cart).</p>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-[0.7rem] uppercase tracking-[0.15em] text-cyan-300">Your total points</div>
+                  <div className="text-lg font-black text-white/95">
+                    {Number(userData?.points || 0).toLocaleString()}
+                  </div>
+                  {cartIsMoneyOnly && !hasEnoughPoints && (
+                    <div className="mt-2 text-xs text-red-400 font-medium">
+                      You need {(totalPointsRequired - userPoints).toLocaleString()} more Fade Points to redeem this purchase.
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
 
           {/* TRUST BOX */}
           <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-xs text-gray-300 mb-6">
@@ -495,75 +661,127 @@ export default function Checkout() {
             ✔ Safe & encrypted checkout
           </div>
 
-          {/* PROMO (temporary client-side 10% off) */}
-          <div className="mb-4 p-4 rounded-xl bg-white/5 border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm">Promo Code</h3>
-              <span className="text-xs text-gray-400">10% off</span>
-            </div>
-
-            <div className="flex gap-2">
-              <input
-                value={promoCode}
-                onChange={(e) => {
-                  setPromoCode(e.target.value)
-                  setPromoError("")
-                  setPromoApplied(false)
-                }}
-                placeholder="Enter promo code"
-                className="flex-1 p-3 rounded-lg bg-white/5 border border-white/10 outline-none text-sm focus-within:border-blue-500"
-              />
-              <button
-                onClick={() => {
-                  const code = promoCode.trim()
-                  if (!code) {
-                    setPromoError("Enter a promo code")
-                    setPromoApplied(false)
-                    return
-                  }
-                  setPromoApplied(true)
-                  setPromoError("")
-                }}
-                disabled={!promoCode.trim()}
-                className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold transition"
-              >
-                Apply
-              </button>
-            </div>
-
-            {promoError && <p className="text-red-400 text-xs mt-2">{promoError}</p>}
-
-            {promoApplied && (
-              <div className="mt-3 text-xs text-gray-300">
-                Promo applied: <span className="text-blue-300 font-bold">-10%</span>
+          {/* PROMO (temporary client-side 10% off) - hide for Fade Points redemption */}
+          {!cartIsMoneyOnly && (
+            <div className="mb-4 p-4 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm">Promo Code</h3>
               </div>
-            )}
-          </div>
+
+              <div className="flex gap-2">
+                <input
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value)
+                    setPromoError("")
+                    setPromoApplied(false)
+                  }}
+                  placeholder="Enter promo code"
+                  className="flex-1 p-3 rounded-lg bg-white/5 border border-white/10 outline-none text-sm focus-within:border-blue-500"
+                />
+                <button
+                  onClick={async () => {
+
+                    const code = promoCode.trim().toUpperCase()
+
+                    if (!code) {
+                      setPromoError("Enter a promo code")
+                      setPromoApplied(false)
+                      return
+                    }
+
+                    try {
+
+                      const res = await fetch('/api/promos/validate', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          code,
+                          userId: session.user.id,
+                          total,
+                        }),
+                      })
+
+                      const data = await res.json()
+
+                      if (!res.ok || !data.success) {
+                        throw new Error(data.error || 'Invalid promo code')
+                      }
+
+                      setPromoApplied(true)
+                      setPromoError("")
+                      setPromoDiscount(data.discountAmount)
+
+                    } catch (err) {
+
+                      setPromoApplied(false)
+                      setPromoDiscount(0)
+                      setPromoError(err.message)
+                    }
+                  }}
+                  disabled={!promoCode.trim()}
+                  className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold transition"
+                >
+                  Apply
+                </button>
+              </div>
+
+              {promoError && <p className="text-red-400 text-xs mt-2">{promoError}</p>}
+
+              {promoApplied && (
+                <div className="mt-3 text-xs text-gray-300">
+                  Promo applied:
+                  <span className="text-blue-300 font-bold ml-1">
+
+                    {promoDiscount > 0
+                      ? `-₹${promoDiscount.toFixed(2)}`
+                      : 'Applied'}
+
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* PAY */}
           <button
             onClick={handleCheckout}
-            disabled={!safeCart.length || processing || !scriptsLoaded[paymentMethod]}
-            className="w-full py-4 rounded-xl cursor-pointer font-black tracking-wider text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition shadow-xl shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            disabled={
+              !safeCart.length ||
+              processing ||
+              (cartIsMoneyOnly && !hasEnoughPoints)
+            }
+            className={cartIsMoneyOnly
+              ? "w-full py-4 rounded-xl cursor-pointer font-black tracking-wider text-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-[1.02] transition shadow-xl shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              : "w-full py-4 rounded-xl cursor-pointer font-black tracking-wider text-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition shadow-xl shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"}
           >
             {processing ? (
               <>
                 <Loader2 className="animate-spin mr-2" size={18} />
-                {paymentError ? "Error, Retry" : "Opening Payment..."}
+                {paymentError ? "Error, Retry" : cartIsMoneyOnly ? "Redeeming..." : "Opening Payment..."}
               </>
             ) : (
               <>
-                <CreditCard className="inline mr-2" size={18} />
-                PAY ₹{Math.max(0, total - (promoApplied ? total * 0.1 : 0)).toFixed(2)} ({paymentMethod.toUpperCase()})
+                {cartIsMoneyOnly ? (
+                  <span className="inline mr-2 text-cyan-200"></span>
+                ) : (
+                  <CreditCard className="inline mr-2" size={18} />
+                )}
+                {cartIsMoneyOnly
+                  ? 'REDEEM WITH FADE POINTS'
+                  : `PAY ₹${Math.max(0, total - promoDiscount).toFixed(2)} (${paymentMethod.toUpperCase()})`}
               </>
             )}
           </button>
+
 
           {paymentError && <p className="text-red-400 text-xs text-center mt-3">{paymentError}</p>}
 
           <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mt-4">
             <ShieldCheck size={14} />
-            Secure gateway: {paymentMethod.toUpperCase()}
+            {cartIsMoneyOnly ? 'Secure redemption with Fade Points' : `Secure gateway: ${paymentMethod.toUpperCase()}`}
           </div>
         </div>
       </div>

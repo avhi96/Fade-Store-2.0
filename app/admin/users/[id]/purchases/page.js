@@ -3,6 +3,9 @@ import AdminAuthWrapper from "@/components/AdminAuthWrapper"
 import Link from 'next/link'
 import { getUser } from "@/lib/users"
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function UserPurchases({ params }) {
   const { id: userId } = await params
   const user = await getUser(userId)
@@ -36,7 +39,21 @@ export default async function UserPurchases({ params }) {
                   <h3 className='font-bold text-xl text-white'>{purchase.name}</h3>
                   <div className='flex gap-4 text-sm'>
                     <span className='text-green-400 font-mono'>₹{purchase.price?.toFixed(2)}</span>
-                    <span className='text-gray-400'>{purchase.timestamp?.toDate ? purchase.timestamp.toDate().toLocaleDateString() : 'Recent'}</span>
+                    <span className='text-gray-400'>
+                      {purchase.timestamp ? 
+                        (() => {
+                          let date;
+                          if (typeof purchase.timestamp === 'string') {
+                            date = new Date(purchase.timestamp);
+                          } else if (purchase.timestamp?.toDate) {
+                            date = purchase.timestamp.toDate();
+                          } else {
+                            return 'Recent';
+                          }
+                          return date.toLocaleString();
+                        })()
+                        : 'Recent'}
+                    </span>
                   </div>
                 </div>
                 {purchase.perks && (
@@ -60,7 +77,7 @@ export default async function UserPurchases({ params }) {
           <div className='text-center py-20 bg-white/5 rounded-xl border border-dashed border-gray-500'>
             <ShoppingBag className='w-16 h-16 mx-auto mb-4 text-gray-500' />
             <h3 className='text-xl text-gray-300 mb-2'>No purchases</h3>
-            <p className='text-gray-500'>This user hasn't made any purchases yet</p>
+            <p className='text-gray-500'>This user has not made any purchases yet</p>
           </div>
         )}
       </div>

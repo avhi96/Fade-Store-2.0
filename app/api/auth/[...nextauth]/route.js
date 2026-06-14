@@ -4,8 +4,8 @@ import DiscordProvider from "next-auth/providers/discord"
 const handler = NextAuth({
   providers: [
     DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID || "1487055588390342816",
-      clientSecret: process.env.DISCORD_CLIENT_SECRET || "7dQ_uf36gqJNTkZHfhfXGwI7l7FbvR_F",
+      clientId: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
     }),
   ],
   callbacks: {

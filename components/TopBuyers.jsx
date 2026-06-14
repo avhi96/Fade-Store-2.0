@@ -2,47 +2,19 @@
 import { useEffect, useState } from 'react'
 import { Crown, Medal } from "lucide-react"
 import Link from "next/link"
-import { getAllOrders } from '@/lib/orders'
+import { getTopBuyers } from '@/lib/top-buyers'
 
 export default function TopBuyers() {
   const [topBuyers, setTopBuyers] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const now = new Date()
-    const month = now.getMonth()
-    const year = now.getFullYear()
-
-    getAllOrders()
-      .then((orders) => {
-        const monthlyOrders = orders.filter((order) => {
-          const ts = order?.timestamp
-          const orderDate = ts?.toDate ? ts.toDate() : ts ? new Date(ts) : null
-          return orderDate && orderDate.getFullYear() === year && orderDate.getMonth() === month
-        })
-
-        const buyerStats = monthlyOrders.reduce((acc, order) => {
-          if (!order?.userId) return acc
-          const key = order.userId
-          if (!acc[key]) {
-            acc[key] = {
-              userId: order.userId,
-              userName: order.userName || 'Unknown',
-              total: 0,
-              orders: 0
-            }
-          }
-          const price = Number(order.product?.price || 0)
-          acc[key].total += price
-          acc[key].orders += 1
-          return acc
-        }, {})
-
-        const sorted = Object.values(buyerStats)
-          .sort((a, b) => b.total - a.total || b.orders - a.orders)
-          .slice(0, 3)
-
-        setTopBuyers(sorted)
+    getTopBuyers({
+      limit: 3,
+      period: 'month',
+    })
+      .then((buyers) => {
+        setTopBuyers(buyers)
       })
       .catch((error) => {
         console.error('Top buyers load failed:', error)
@@ -71,7 +43,7 @@ export default function TopBuyers() {
             letterSpacing: "0.04em"
           }}
         >
-          Top Supporters This Month
+          Top Supporters
         </h2>
       </div>
 
@@ -144,9 +116,9 @@ export default function TopBuyers() {
       {/* BUTTON (IMPORTANT FIX) */}
       <div className="text-center mt-8">
         <Link href="/partners">
-        <button className="px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase tracking-[0.06em] font-bold hover:border-blue-400 hover:text-blue-400 hover:bg-blue-400/10 transition cursor-pointer">
-          View All & Partners →
-        </button>
+          <button className="px-6 py-3 rounded-lg border border-white/10 bg-white/5 text-gray-400 uppercase tracking-[0.06em] font-bold hover:border-blue-400 hover:text-blue-400 hover:bg-blue-400/10 transition cursor-pointer">
+            View All & Partners →
+          </button>
         </Link>
       </div>
 

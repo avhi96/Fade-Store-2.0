@@ -1,8 +1,11 @@
 "use client"
 
-const parsePerks = (perksString) => perksString.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
+const parsePerks = (perksString = '') =>
+  String(perksString)
+    .split(/\r?\n/)
+    .map(p => p.trim())
+    .filter(Boolean)
 
-import { useSession } from 'next-auth/react'
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, X, List, Upload, Link } from 'lucide-react'
 import clsx from 'clsx'
@@ -11,13 +14,15 @@ import StoreCard from './StoreCard'
 import { AdminProductsSkeleton } from './Skeleton'
 
 import {
-  collection, addDoc, deleteDoc, doc,
-  updateDoc, onSnapshot, query, orderBy, serverTimestamp
+  collection,
+  getDocs,
+  query,
+  orderBy
 } from 'firebase/firestore'
+
 import { db } from '@/lib/firebase'
 
 export default function AdminProducts({ isAdmin }) {
-  const { data: session } = useSession()
 
   const tabs = [
     { id: 'all', label: 'All' },
@@ -91,39 +96,46 @@ export default function AdminProducts({ isAdmin }) {
     }
   }, [formData])
 
-  if (!isAdmin) {
-    return (
-      <div className='min-h-screen flex items-center justify-center'>
-        <div className='text-red-400 text-xl font-semibold'>Access Denied</div>
-      </div>
-    )
-  }
-
   useEffect(() => {
-    const q = query(
-      collection(db, 'products'),
-      orderBy('createdAt', 'desc')
-    )
 
-    const unsub = onSnapshot(q, (snap) => {
-      console.log('Products loaded:', snap.docs.length)
-      const data = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      }))
-      setProducts(data)
-      setFilteredProducts(data)
-      setLoading(false)
-    }, (error) => {
-      console.error('Products ERROR:', error)
-      setError(error.message)
-      setProducts([])
-      setFilteredProducts([])
-      setLoading(false)
-    })
+    const fetchProducts = async () => {
 
-    return () => unsub()
-  }, [])
+      if (!isAdmin) {
+        setLoading(false)
+        return
+      }
+
+      try {
+
+        const q = query(
+          collection(db, 'products'),
+          orderBy('createdAt', 'desc')
+        )
+
+        const snap = await getDocs(q)
+
+        const data = snap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+
+        setProducts(data)
+        setFilteredProducts(data)
+
+      } catch (error) {
+
+        console.error(error)
+        setError(error.message)
+
+      } finally {
+
+        setLoading(false)
+      }
+    }
+
+    fetchProducts()
+
+  }, [isAdmin])
 
   useEffect(() => {
     if (selectedCat === 'all') {
@@ -132,6 +144,14 @@ export default function AdminProducts({ isAdmin }) {
       setFilteredProducts(products.filter(p => p.cat === selectedCat))
     }
   }, [products, selectedCat])
+
+  if (!isAdmin) {
+    return (
+      <div className='min-h-screen flex items-center justify-center'>
+        <div className='text-red-400 text-xl font-semibold'>Access Denied</div>
+      </div>
+    )
+  }
 
   const openAdd = () => {
     setEditId(null)
@@ -151,7 +171,8 @@ export default function AdminProducts({ isAdmin }) {
       badge: '',
       color: '#63b3ed',
       perks: '',
-      details: ''
+      details: '',
+      imageUrl: ''
     })
     setShowModal(true)
   }
@@ -163,8 +184,19 @@ export default function AdminProducts({ isAdmin }) {
       name: p.name || '',
       cat: p.cat || 'ranks',
       icon: p.icon || '',
-      price: p.price || 4.99,
-      old: p.old || 0,
+      price:
+        typeof p.price === 'number'
+          ? p.price
+          : 4.99,
+
+      old:
+        typeof p.old === 'number'
+          ? p.old
+          : 0,
+      pointsCost: typeof p.pointsCost === 'number' ? p.pointsCost : 0,
+      inGameMoneyAmount: typeof p.inGameMoneyAmount === 'number' ? p.inGameMoneyAmount : 0,
+      redemptionDescription: p.redemptionDescription || '',
+      deliveryCommands: Array.isArray(p.deliveryCommands) ? p.deliveryCommands.join('\n') : (typeof p.deliveryCommands === 'string' ? p.deliveryCommands : ''),
       badge: p.badge || '',
       color: p.color || '#63b3ed',
       perks: Array.isArray(p.perks) ? p.perks.join('\n') : (typeof p.perks === 'string' ? p.perks : ''),
@@ -211,14 +243,31 @@ export default function AdminProducts({ isAdmin }) {
         deliveryCommands: isMoney ? deliveryCommandsArr : [],
       }
 
+      const response = await fetch(
+        '/api/admin/products/save',
+        {
+          method: 'POST',
 
-      if (editId) {
-        await updateDoc(doc(db, 'products', editId), data)
-      } else {
-        await addDoc(collection(db, 'products'), {
-          ...data,
-          createdAt: serverTimestamp()
-        })
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+
+          body: JSON.stringify({
+            editId,
+            data,
+          }),
+        }
+      )
+
+      const result =
+        await response.json()
+
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+          'Save failed'
+        )
       }
 
       setShowModal(false)
@@ -230,11 +279,47 @@ export default function AdminProducts({ isAdmin }) {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this product?')) return
+
+    if (!confirm('Delete this product?')) {
+      return
+    }
+
     try {
-      await deleteDoc(doc(db, 'products', id))
-    } catch {
-      alert('Delete failed')
+
+      const response = await fetch(
+        '/api/admin/products/delete',
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+
+          body: JSON.stringify({
+            id,
+          }),
+        }
+      )
+
+      const result =
+        await response.json()
+
+      if (!result.success) {
+        throw new Error(
+          result.error ||
+          'Delete failed'
+        )
+      }
+
+    } catch (error) {
+
+      console.error(error)
+
+      alert(
+        error.message ||
+        'Delete failed'
+      )
     }
   }
 
@@ -283,7 +368,7 @@ export default function AdminProducts({ isAdmin }) {
             )}
           >
             {label}
-        </button>
+          </button>
         ))}
       </div>
 
@@ -408,40 +493,115 @@ export default function AdminProducts({ isAdmin }) {
 
                 <div>
                   <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block'>
-                    Pricing
+                    {formData.cat === 'money' ? 'Points Cost & Redemption' : 'Pricing'}
                   </label>
-                  <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                    <div className='flex flex-col'>
-                      <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>Discounted Price</label>
-                      <input
-                        type='number'
-                        step='0.01'
-                        className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
-                        placeholder='₹99'
-                        value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      />
+
+                  {formData.cat === 'money' ? (
+                    <div className='space-y-4'>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                        <div className='flex flex-col'>
+                          <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>
+                            Points Cost
+                          </label>
+                          <input
+                            required
+                            type='number'
+                            step='1'
+                            min='0'
+                            className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
+                            placeholder='1000'
+                            value={formData.pointsCost}
+                            onChange={(e) => setFormData({ ...formData, pointsCost: e.target.value })}
+                          />
+                          <p className='text-[11px] text-gray-500 mt-1'>Use integer Fade Points.</p>
+                        </div>
+
+                        <div className='flex flex-col'>
+                          <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>
+                            In-game Money Amount
+                          </label>
+                          <input
+                            required
+                            type='number'
+                            step='1'
+                            min='0'
+                            className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
+                            placeholder='250000'
+                            value={formData.inGameMoneyAmount}
+                            onChange={(e) => setFormData({ ...formData, inGameMoneyAmount: e.target.value })}
+                          />
+                          <p className='text-[11px] text-gray-500 mt-1'>Delivered instantly after redemption.</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block'>
+                          Redemption Description
+                        </label>
+                        <input
+                          className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white placeholder-gray-500 focus:border-blue-400/40 focus:outline-none transition'
+                          placeholder='e.g. Redeem to receive 250k in-game money'
+                          value={formData.redemptionDescription}
+                          onChange={(e) => setFormData({ ...formData, redemptionDescription: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block'>
+                          Delivery Commands (optional)
+                        </label>
+                        <textarea
+                          className='w-full px-4 py-3 min-h-[90px] max-h-[180px] rounded-lg bg-white/[0.04] border border-white/10 text-white resize-vertical'
+                          placeholder={'One command per line.\nExample:\n/giveMoney %PLAYER% 250000\n'}
+                          value={formData.deliveryCommands}
+                          onChange={(e) => setFormData({ ...formData, deliveryCommands: e.target.value })}
+                        />
+                        <p className='text-[11px] text-gray-500 mt-1'>Only saved/validated server-side as safe characters.</p>
+                      </div>
                     </div>
-                    <div className='flex flex-col'>
-                      <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>Original Price</label>
-                      <input
-                        type='number'
-                        step='0.01'
-                        className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
-                        placeholder='₹199'
-                        value={formData.old}
-                        onChange={(e) => setFormData({ ...formData, old: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  {formData.old > 0 && formData.price > 0 && (
-                    <div className='mt-2 p-2 bg-blue-500/10 border border-blue-400/30 rounded-lg'>
-                      <span className='text-sm text-blue-300 font-medium'>
-                        Discount: {Math.round(((formData.old - formData.price) / formData.old * 100))}%
-                      </span>
+                  ) : (
+                    <div>
+                      <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+
+                        <div className='flex flex-col'>
+
+                          <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>Discounted Price</label>
+                          <input
+                            type='number'
+                            step='0.01'
+                            className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
+                            placeholder='₹99'
+                            value={formData.price}
+                            onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                            disabled={formData.cat === 'money'}
+                          />
+                        </div>
+                        <div className='flex flex-col'>
+                          <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-1 block'>Original Price</label>
+                          <input
+                            type='number'
+                            step='0.01'
+                            className='w-full px-4 py-3 rounded-lg bg-white/[0.04] border border-white/10 text-white text-left'
+                            placeholder='₹199'
+                            value={formData.old}
+                            onChange={(e) => setFormData({ ...formData, old: e.target.value })}
+                            disabled={formData.cat === 'money'}
+                          />
+                        </div>
+                      </div>
+
+                      {formData.old > 0 && formData.price > 0 && (
+                        <div className='mt-2 p-2 bg-blue-500/10 border border-blue-400/30 rounded-lg'>
+                          <span className='text-sm text-blue-300 font-medium'>
+                            Discount: {Math.round(((formData.old - formData.price) / formData.old * 100))}%
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+
+
 
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>
@@ -495,7 +655,7 @@ export default function AdminProducts({ isAdmin }) {
                     onChange={(e) => setFormData({ ...formData, details: e.target.value })}
                   />
                 </div>
-                                <div>
+                <div>
                   <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block'>
                     Product Image (URL)
                   </label>

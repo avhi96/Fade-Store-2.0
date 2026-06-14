@@ -50,7 +50,7 @@ export default function StoreCard({ p, adminMode = false, onEdit, onDelete, onAd
       {/* Optional small product image */}
       {p.imageUrl && (
         <div className="absolute top-4 left-4 z-10">
-{/* <img
+          {/* <img
             src={p.imageUrl.startsWith('https://drive.google.com') || p.imageUrl.includes('dropbox.com') ? `/api/proxy-image?url=${encodeURIComponent(p.imageUrl)}` : p.imageUrl}
             alt={p.name}
             className="w-12 h-12 object-cover rounded-xl shadow-lg ring-1 ring-white/30"
@@ -102,23 +102,66 @@ export default function StoreCard({ p, adminMode = false, onEdit, onDelete, onAd
 
         <div className="flex items-end justify-between pt-2 border-t border-white/10">
           <div>
-            <div
-              className="font-mono text-2xl font-black tracking-tight"
-              style={{
-                fontFamily: 'Orbitron, monospace'
-              }}
-            >
-              ₹{p.price}
-            </div>
+            {p.cat === 'money' ? (
+              <div className="flex flex-col gap-2">
+                {/* points + redeem label row */}
+                <div className="flex items-end justify-between gap-4">
 
-            {p.old && p.old > p.price && (
-              <div className="inline-flex items-center gap-1">
-                <span className="text-xs text-gray-400 line-through">₹{p.old}</span>
-                <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">
-                  {Math.round(((p.old - p.price) / p.old * 100))}% off
-                </span>
+                  {/* LEFT — points */}
+                  <div className="flex items-end gap-2">
+
+
+                    <span
+                      className="font-mono text-3xl font-black text-white leading-none"
+                      style={{ fontFamily: 'Orbitron, monospace' }}
+                    >
+                      {Number(p.pointsCost || 0).toLocaleString()}
+                    </span>
+
+                    <span className="mb-1 text-cyan-300 text-sm font-bold">
+                      FP
+                    </span>
+
+                  </div>
+                </div>
+
+                {/* reward */}
+                {p.inGameMoneyAmount && (
+                  <div className="mt-3 inline-flex items-center max-w-fit gap-1.5 px-2 py-1 rounded-lg bg-emerald-400/10 border border-emerald-400/20">
+
+                    <Lucide.Coins size={11} className="text-emerald-400 flex-shrink-0" />
+
+                    <span className="text-[11px] text-emerald-300 font-medium whitespace-nowrap">
+                      Gives ${Number(p.inGameMoneyAmount).toLocaleString()} in-game money
+                    </span>
+
+                  </div>
+                )}
+
               </div>
+            ) : (
+              <>
+                <div
+                  className="font-mono text-2xl font-black tracking-tight"
+                  style={{
+                    fontFamily: 'Orbitron, monospace'
+                  }}
+                >
+                  ₹{p.price}
+                </div>
+
+
+                {p.old && p.old > p.price && (
+                  <div className="inline-flex items-center gap-1">
+                    <span className="text-xs text-gray-400 line-through">₹{p.old}</span>
+                    <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">
+                      {Math.round(((p.old - p.price) / p.old * 100))}% off
+                    </span>
+                  </div>
+                )}
+              </>
             )}
+
           </div>
 
           {adminMode ? (
@@ -143,9 +186,12 @@ export default function StoreCard({ p, adminMode = false, onEdit, onDelete, onAd
                 View Details
               </button>
               <button
-                onClick={() => onAddCart?.(p)}
-                className={`flex-1 px-3 py-2 text-xs cursor-pointer rounded-lg uppercase font-bold tracking-wider shadow-lg hover:shadow-xl transition-all border ${isInCart
-                    ? 'bg-green-500/20 text-green-400 border-green-500/50 hover:bg-green-500/30'
+                onClick={() => {
+                  if (isInCart) return
+                  onAddCart?.(p)
+                }}
+                className={`flex-1 px-3 py-2 text-xs rounded-lg uppercase font-bold tracking-wider shadow-lg transition-all border ${isInCart
+                    ? 'bg-green-500/20 text-green-400 border-green-500/50 cursor-not-allowed opacity-80'
                     : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 border-white/20'
                   }`}
               >

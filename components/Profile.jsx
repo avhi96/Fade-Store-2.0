@@ -9,13 +9,17 @@ import {
   CreditCard
 } from "lucide-react"
 
+
 import { useSession, signOut } from "next-auth/react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+
 import { getUser } from "@/lib/client-users"
 import { ADMIN_IDS } from "@/lib/admins"
 import { FADE_RANKS, getFadeRankIndex } from "@/lib/fadePoints"
 
 export default function Profile() {
+  const router = useRouter()
 
   const { data: session, status } = useSession()
 
@@ -63,14 +67,14 @@ export default function Profile() {
 
   const totalSpent = userData
     ? (() => {
-        // IMPORTANT: derive from verified purchases (checkout currently writes totalSpent per cart-item loop).
-        const purchasesArr = Array.isArray(userData.purchases) ? userData.purchases : []
-        return purchasesArr.reduce((sum, p) => {
-          if (!p?.verified) return sum
-          const sub = Number(p?.subtotal ?? (Number(p?.price || 0) * Number(p?.qty || 1)))
-          return sum + (Number.isFinite(sub) ? sub : 0)
-        }, 0)
-      })()
+      // IMPORTANT: derive from verified purchases (checkout currently writes totalSpent per cart-item loop).
+      const purchasesArr = Array.isArray(userData.purchases) ? userData.purchases : []
+      return purchasesArr.reduce((sum, p) => {
+        if (!p?.verified) return sum
+        const sub = Number(p?.subtotal ?? (Number(p?.price || 0) * Number(p?.qty || 1)))
+        return sum + (Number.isFinite(sub) ? sub : 0)
+      }, 0)
+    })()
     : 0
 
   const fadeRankIndex = getFadeRankIndex(totalSpent) // 0..5
@@ -107,11 +111,66 @@ export default function Profile() {
     rank: rankObj.name
   }
 
-  const purchases = (userData?.purchases || []).slice(0, 5).map(p => ({
-    name: p.name,
-    price: p.price,
-    date: p.timestamp ? p.timestamp.toDate().toLocaleDateString() : 'Recent'
-  })).reverse()
+  const purchases = (userData?.purchases || [])
+    .map((p) => {
+      const normalizeTimestampMillis = (value) => {
+        if (!value) return null
+        // Firestore Timestamp
+        if (typeof value === 'object' && typeof value.toMillis === 'function') {
+          const ms = value.toMillis()
+          return Number.isFinite(ms) ? ms : null
+        }
+        // ISO string
+        if (typeof value === 'string') {
+          const ms = Date.parse(value)
+          return Number.isFinite(ms) ? ms : null
+        }
+        // number
+        if (typeof value === 'number') {
+          return Number.isFinite(value) ? value : null
+        }
+        // Date
+        if (value instanceof Date) {
+          const ms = value.getTime()
+          return Number.isFinite(ms) ? ms : null
+        }
+        return null
+      }
+
+      const ts = normalizeTimestampMillis(p?.timestamp)
+      const createdAt = normalizeTimestampMillis(p?.createdAt)
+      const fallbackAt = normalizeTimestampMillis(p?.fallbackAt)
+      const updatedAt = normalizeTimestampMillis(p?.updatedAt)
+
+      // stable deterministic fallback (no Date.now): if timestamps are missing,
+      // we still keep ordering consistent.
+      let h = 0
+      const id = String(
+        p?.id ?? p?.orderId ?? p?.orderID ?? p?.paymentId ?? p?.paymentID ?? p?.name ?? 'p'
+      )
+      for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+
+      const FIXED_BASE = 1735689600000 // 2025-01-01T00:00:00Z
+      const stableFallback = FIXED_BASE + (h % 10_000)
+
+      const sortTs = ts ?? createdAt ?? fallbackAt ?? updatedAt ?? stableFallback
+
+      return {
+        name: p.name,
+        price: p.price,
+        pointsCost: p.pointsCost,
+        currency: p.currency,
+        type: p.type,
+        sortTs,
+        date: ts
+          ? new Date(ts).toLocaleDateString()
+          : createdAt
+            ? new Date(createdAt).toLocaleDateString()
+            : 'Recent',
+      }
+    })
+    .sort((a, b) => b.sortTs - a.sortTs)
+    .slice(0, 5)
 
   const points = userData?.points || 0
 
@@ -143,7 +202,7 @@ export default function Profile() {
       {/* LAYOUT */}
       <div className="grid md:grid-cols-[300px_1fr] gap-8">
 
-          {/* LEFT PANEL */}
+        {/* LEFT PANEL */}
         <div className="p-6 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl text-center">
 
           {/* AVATAR */}
@@ -232,7 +291,12 @@ export default function Profile() {
                 </div>
               </div>
 
-              <button className="px-4 py-2 text-xs rounded-lg border border-blue-400/30 text-blue-400 hover:bg-blue-400/10 transition uppercase tracking-[0.1em]">
+              <button
+                onClick={() => {
+                  router.push('/store?category=money')
+                }}
+                className="px-4 py-2 text-xs rounded-lg border border-blue-400/30 text-blue-400 hover:bg-blue-400/10 transition uppercase tracking-[0.1em]"
+              >
                 Redeem
               </button>
 
@@ -268,24 +332,29 @@ export default function Profile() {
 
             <div className="flex flex-col gap-4">
 
-              {purchases.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center pb-3 border-b border-white/5 hover:border-blue-400/30 transition"
-                >
-                  <div>
-                    <div className="text-white text-sm">{p.name}</div>
-                    <div className="text-gray-500 text-xs">{p.date}</div>
-                  </div>
+              {purchases
 
+                .slice(0, 2)
+                .map((p, i) => (
                   <div
-                    className="text-yellow-400 text-sm font-bold"
-                    style={{ fontFamily: "Orbitron, monospace" }}
+                    key={i}
+                    className="flex justify-between items-center pb-3 border-b border-white/5 hover:border-blue-400/30 transition"
                   >
-                    ₹{p.price}
+                    <div>
+                      <div className="text-white text-sm">{p.name}</div>
+                      <div className="text-gray-500 text-xs">{p.date}</div>
+                    </div>
+
+                    <div
+                      className="text-yellow-400 text-sm font-bold"
+                      style={{ fontFamily: "Orbitron, monospace" }}
+                    >
+                      {(p.type === 'points_redemption' || p.currency === 'FP')
+                        ? `${Number(p.pointsCost ?? p.price ?? 0).toFixed(0)} FP`
+                        : `₹${p.price}`}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
             </div>
 

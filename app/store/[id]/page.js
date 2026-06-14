@@ -52,16 +52,24 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!productId) return
 
+    // Reset to avoid blank/stale UI during rapid navigation/back-forward
+    setProduct(null)
+    setLoading(true)
+
+    let didCancel = false
+
     const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
     const cacheKey = `product_${productId}`
     const cachedStr = localStorage.getItem(cacheKey)
-    
+
     if (cachedStr) {
       try {
         const cached = JSON.parse(cachedStr)
         if (Date.now() - cached.cachedAt < CACHE_DURATION) {
-          setProduct(cached.data)
-          setLoading(false)
+          if (!didCancel) {
+            setProduct(cached.data)
+            setLoading(false)
+          }
           return
         }
       } catch (e) {
@@ -72,22 +80,29 @@ export default function ProductDetail() {
     const ref = doc(db, "products", productId)
 
     const unsub = onSnapshot(ref, (snap) => {
+      if (didCancel) return
       if (snap.exists()) {
-        const dataWithCache = { 
-          id: productId, 
-          ...snap.data(), 
-          cachedAt: Date.now() 
+        const dataWithCache = {
+          id: productId,
+          ...snap.data(),
+          cachedAt: Date.now(),
         }
         setProduct(dataWithCache)
-        localStorage.setItem(cacheKey, JSON.stringify({ data: dataWithCache, cachedAt: Date.now() }))
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({ data: dataWithCache, cachedAt: Date.now() })
+        )
       } else {
         setProduct(null)
         localStorage.removeItem(cacheKey)
       }
-      if (loading) setLoading(false)
+      setLoading(false)
     })
 
-    return unsub
+    return () => {
+      didCancel = true
+      unsub()
+    }
   }, [productId])
 
   const handleAddToCart = () => {
@@ -218,26 +233,56 @@ export default function ProductDetail() {
 
             {/* PRICE */}
             <div className="mb-6">
-
-              <div className="text-4xl font-black">
-                ₹{product.price}
-              </div>
-
-              {product.old && (
-                <div className="flex gap-3 mt-2">
-                  <span className="line-through text-gray-400">
-                    ₹{product.old}
-                  </span>
-                  <span className="text-red-400 text-sm">
-                    {Math.round(
-                      ((product.old - product.price) / product.old) * 100
-                    )}
-                    % OFF
-                  </span>
+              {product.cat === 'money' ? (
+                <div className="space-y-3">
+                  <div className="text-3xl font-black">
+                    Redeem with Fade Points
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="text-4xl font-black text-cyan-300 font-mono">
+                      {product.pointsCost ?? 0}
+                    </div>
+                    <div className="text-sm text-gray-400 bg-cyan-400/10 border border-cyan-400/30 rounded-full px-3 py-1 font-bold">
+                      Fade Points
+                    </div>
+                    <div className="text-sm text-cyan-200 font-bold">
+                      → {product.inGameMoneyAmount ?? 0} in-game money
+                    </div>
+                  </div>
+                  {product.redemptionDescription ? (
+                    <div className="text-gray-400 text-sm whitespace-pre-wrap">
+                      {product.redemptionDescription}
+                    </div>
+                  ) : (
+                    <div className="text-gray-400 text-sm">
+                      Instant delivery after redemption.
+                    </div>
+                  )}
                 </div>
-              )}
+              ) : (
 
+                <>
+                  <div className="text-4xl font-black">
+                    ₹{product.price}
+                  </div>
+
+                  {product.old && (
+                    <div className="flex gap-3 mt-2">
+                      <span className="line-through text-gray-400">
+                        ₹{product.old}
+                      </span>
+                      <span className="text-red-400 text-sm">
+                        {Math.round(
+                          ((product.old - product.price) / product.old) * 100
+                        )}
+                        % OFF
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
+
 
             {/* BUTTONS */}
             <div className="flex gap-4">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from "framer-motion"
 import { getStoreSettings } from '@/lib/settings'
-import { getAllOrders } from '@/lib/orders'
+import { getTopBuyers } from '@/lib/top-buyers'
 
 export default function Partners() {
   const [partners, setPartners] = useState([])
@@ -24,31 +24,15 @@ export default function Partners() {
         setPartners([])
       })
 
-    const o = getAllOrders()
-      .then((orders) => {
-        const buyerMap = orders.reduce((acc, order) => {
-          if (!order?.userId) return acc
-          const key = order.userId
-          acc[key] = acc[key] || {
-            userId: order.userId,
-            userName: order.userName || 'Unknown',
-            total: 0,
-            orders: 0
-          }
-          const price = Number(order.product?.price || 0)
-          acc[key].total += price
-          acc[key].orders += 1
-          return acc
-        }, {})
-
-        const sorted = Object.values(buyerMap)
-          .sort((a, b) => b.total - a.total || b.orders - a.orders)
-          .slice(0, 5)
-
-        setTopBuyers(sorted)
+    const o = getTopBuyers({
+      limit: 5,
+      period: 'all',
+    })
+      .then((buyers) => {
+        setTopBuyers(buyers)
       })
       .catch((err) => {
-        console.error('Failed to load orders for top buyers', err)
+        console.error('Failed to load top buyers', err)
         setTopBuyers([])
       })
 
