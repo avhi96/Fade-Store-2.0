@@ -171,7 +171,7 @@ export default function AdminOrders({ isAdmin }) {
       const { deleteOrderById } = await import('@/lib/orders')
       const res = await deleteOrderById(orderId)
 
-      if (!res?.ok) {
+      if (!res?.success) {
         setDeleteError(res?.error || 'Delete failed')
         return
       }

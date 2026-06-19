@@ -138,6 +138,7 @@ export default function Store() {
   const filtered = active === "all"
     ? productsData
     : productsData.filter(p => p.cat === active)
+  const isBundles = active === "bundles"
 
   const subtotal = cart.reduce((s, i) => {
 
@@ -201,16 +202,44 @@ export default function Store() {
       </div>
 
       {/* ── PRODUCT GRID ───────────────────────────────────────── */}
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filtered.map(p => (
-          <StoreCard
-            key={p.id}
-            p={p}
-            onAddCart={addToCart}
-            isInCart={cart.some(i => i.id === p.id)}
-          />
-        ))}
-      </div>
+      {isBundles ? (
+        <div className="flex flex-col items-center justify-center py-24 rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
+          <Layers className="w-16 h-16 text-blue-400 mb-6 opacity-80" />
+
+          <h3
+            className="text-3xl font-bold text-white"
+            style={{ fontFamily: "Orbitron, monospace" }}
+          >
+            Bundles Coming Soon
+          </h3>
+
+          <p className="mt-4 max-w-md text-center text-gray-400 leading-relaxed">
+            We're creating exclusive bundles with the best value for our community.
+            Stay tuned—they'll be available soon!
+          </p>
+
+          <div className="mt-8 px-5 py-2 rounded-full border border-blue-400/30 bg-blue-400/10 text-blue-300 text-sm uppercase tracking-widest">
+            Coming Soon
+          </div>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filtered.length > 0 ? (
+            filtered.map((p) => (
+              <StoreCard
+                key={p.id}
+                p={p}
+                onAddCart={addToCart}
+                isInCart={cart.some(i => i.id === p.id)}
+              />
+            ))
+          ) : (
+            <div className="col-span-full text-center text-gray-400 py-16">
+              No products available.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── FLOATING CART FAB ──────────────────────────────────── */}
       <button

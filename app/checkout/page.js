@@ -7,18 +7,12 @@ import { useCart } from "@/hooks/useCart"
 import { getUser } from "@/lib/client-users"
 import {
   ArrowLeft,
-  ShoppingCart,
   CreditCard,
   ShieldCheck,
   User,
   Mail,
   Loader2,
-  CheckCircle2,
-  XCircle
 } from "lucide-react"
-
-
-
 
 export default function Checkout() {
   const router = useRouter()
@@ -41,8 +35,6 @@ export default function Checkout() {
   const [promoError, setPromoError] = useState("")
   const [promoDiscount, setPromoDiscount] = useState(0)
 
-  const [scriptsLoaded, setScriptsLoaded] = useState({ razorpay: false, cashfree: false })
-  const [orderData, setOrderData] = useState(null)
   const [paymentError, setPaymentError] = useState('')
 
   const [userData, setUserData] = useState(null)
@@ -112,30 +104,25 @@ export default function Checkout() {
 
   // Load payment scripts
   useEffect(() => {
-    const loadScript = (src, key) => {
-      const existing =
-        document.querySelector(
-          `script[src="${src}"]`
-        )
+    const loadScript = (src) => {
+      const existing = document.querySelector(`script[src="${src}"]`)
 
-      if (existing) {
-        setScriptsLoaded(prev => ({
-          ...prev,
-          [key]: true,
-        }))
-        return
-      }
+      if (existing) return
 
-      const script = document.createElement('script')
+      const script = document.createElement("script")
       script.src = src
       script.async = true
-      script.onload = () => setScriptsLoaded(prev => ({ ...prev, [key]: true }))
-      script.onerror = () => setPaymentError('Failed to load payment SDK')
+
+      script.onerror = (err) => {
+        console.error(err)
+        setPaymentError("Failed to load payment SDK")
+      }
+
       document.head.appendChild(script)
     }
 
-    loadScript('https://checkout.razorpay.com/v1/checkout.js', 'razorpay')
-    loadScript('https://sdk.cashfree.com/js/v3/cashfree.js', 'cashfree')
+    loadScript('https://checkout.razorpay.com/v1/checkout.js')
+    loadScript('https://sdk.cashfree.com/js/v3/cashfree.js')
   }, [])
 
   // Guard: sometimes `cart` can briefly be empty/undefined during hydration.
@@ -198,7 +185,7 @@ export default function Checkout() {
             mcName,
             buyerEmail: email || '',
             // stable idempotency per checkout attempt so re-renders don't create new server requests
-            idempotencyKey: `${session.user.id}-${mcName}-${cartSnapshot.map(i => i.id || i.productId).join(',')}`,
+            idempotencyKey: `${session?.user?.id}-${mcName}-${cartSnapshot.map(i => i.id || i.productId).join(',')}`,
           }),
         })
 
@@ -217,7 +204,7 @@ export default function Checkout() {
             },
             body: JSON.stringify({
               code: promoCode.trim().toUpperCase(),
-              userId: session.user.id,
+              userId: session?.user?.id,
             }),
           })
         }
@@ -256,6 +243,12 @@ export default function Checkout() {
     try {
       const orderId = `${session.user.id}-${Date.now()}`
 
+      const allowedMethods = ["razorpay", "cashfree"]
+
+      if (!allowedMethods.includes(paymentMethod)) {
+        throw new Error("Invalid payment method")
+      }
+
       // Create server order first (gateway amount must be payableTotal after promo)
       const createRes = await fetch(`/api/payments/${paymentMethod}/create`, {
         method: 'POST',
@@ -274,7 +267,7 @@ export default function Checkout() {
 
           paymentMethod,
 
-          userId: session.user.id,
+          userId: session?.user?.id,
 
           cartSnapshot,
 
@@ -351,7 +344,7 @@ export default function Checkout() {
         rzp.open()
       } else if (paymentMethod === 'cashfree') {
 
-        if (!window.Cashfree) {
+        if (typeof window === "undefined" || !window.Cashfree) {
           throw new Error('Cashfree SDK not loaded')
         }
 
@@ -406,6 +399,21 @@ export default function Checkout() {
     }
   }
 
+useEffect(() => {
+  if (!session?.user?.id) return
+
+  const mcKey = `mcName_${session.user.id}`
+  const emailKey = `email_${session.user.id}`
+
+  if (localStorage.getItem(mcKey) !== mcName) {
+    localStorage.setItem(mcKey, mcName)
+  }
+
+  if (localStorage.getItem(emailKey) !== email) {
+    localStorage.setItem(emailKey, email)
+  }
+}, [mcName, email, session])
+
 
   const verifyPayment = async (gateway, paymentData, orderDetails, cartSnapshot, snapshotTotal) => {
     try {
@@ -418,7 +426,7 @@ export default function Checkout() {
 
           ...orderDetails,
 
-          userId: session.user.id,
+          userId: session?.user?.id,
 
           cartSnapshot,
 
@@ -699,7 +707,7 @@ export default function Checkout() {
                         },
                         body: JSON.stringify({
                           code,
-                          userId: session.user.id,
+                          userId: session?.user?.id,
                           total,
                         }),
                       })

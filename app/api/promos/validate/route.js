@@ -59,14 +59,28 @@ export async function POST(req) {
         .doc('store')
         .get()
 
-    if (!settingsSnap.exists()) {
-      return NextResponse.json({
-        success: false,
-        error: 'Settings not found',
-      }, { status: 404 })
-    }
+if (!settingsSnap.exists) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Settings not found",
+    },
+    { status: 404 }
+  )
+}
 
     const settings = settingsSnap.data()
+
+    console.log("========== PROMO DEBUG ==========")
+    console.log("Settings exists:", settingsSnap.exists)
+    console.log("Settings:", settings)
+    console.log("Promo Codes:", settings?.promoCodes)
+    console.log("Searching for:", normalizedCode)
+    console.log(
+      "Available codes:",
+      (settings?.promoCodes || []).map(p => p.code)
+    )
+    console.log("=================================")
 
     const promos =
       Array.isArray(settings?.promoCodes)
@@ -137,12 +151,17 @@ export async function POST(req) {
     })
 
   } catch (err) {
+    console.error("PROMO VALIDATE ERROR:", err)
 
-    console.error(err)
-
-    return NextResponse.json({
-      success: false,
-      error: 'Promo validation failed',
-    }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: err?.message,
+        stack: process.env.NODE_ENV === "development"
+          ? err?.stack
+          : undefined,
+      },
+      { status: 500 }
+    )
   }
 }

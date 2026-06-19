@@ -89,14 +89,14 @@ export default function StoreCard({ p, adminMode = false, onEdit, onDelete, onAd
         </h3>
 
         <ul className="mb-6 space-y-1.5">
-          {perksArray.slice(0, 4).map((perk, i) => (
+          {perksArray.slice(0, 2).map((perk, i) => (
             <li key={i} className="text-sm text-gray-300 flex items-center gap-2">
               <Lucide.Diamond size={10} className="text-blue-400 flex-shrink-0" />
               <span className="leading-relaxed whitespace-pre-line break-words max-w-none">{perk}</span>
             </li>
           ))}
           {perksArray.length > 4 && (
-            <li className="text-xs text-gray-500">+{perksArray.length - 4} more</li>
+            <li className="text-xs text-gray-500">+{perksArray.length - 2} more</li>
           )}
         </ul>
 

@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation"
 import { getUser } from "@/lib/client-users"
 import { ADMIN_IDS } from "@/lib/admins"
 import { FADE_RANKS, getFadeRankIndex } from "@/lib/fadePoints"
+import Link from "next/link"
 
 export default function Profile() {
   const router = useRouter()
@@ -360,12 +361,38 @@ export default function Profile() {
 
           </div>
 
+          {/* LEGAL LINKS */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+
+            <Link
+              href="/legal/privacy"
+              className="py-3 rounded-xl border border-white/10 bg-white/[0.03] text-center text-sm text-gray-300 hover:border-blue-400/40 hover:bg-blue-400/10 hover:text-blue-400 transition"
+            >
+              Privacy Policy
+            </Link>
+
+            <Link
+              href="/legal/refund"
+              className="py-3 rounded-xl border border-white/10 bg-white/[0.03] text-center text-sm text-gray-300 hover:border-blue-400/40 hover:bg-blue-400/10 hover:text-blue-400 transition"
+            >
+              Refund Policy
+            </Link>
+
+            <Link
+              href="/legal/terms"
+              className="py-3 rounded-xl border border-white/10 bg-white/[0.03] text-center text-sm text-gray-300 hover:border-blue-400/40 hover:bg-blue-400/10 hover:text-blue-400 transition"
+            >
+              Terms of Service
+            </Link>
+
+          </div>
         </div>
 
       </div>
 
     </section>
   )
+
 }
 
 /* COMPONENTS */

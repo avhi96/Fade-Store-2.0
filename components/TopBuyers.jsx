@@ -11,7 +11,7 @@ export default function TopBuyers() {
   useEffect(() => {
     getTopBuyers({
       limit: 3,
-      period: 'month',
+      period: 'all',
     })
       .then((buyers) => {
         setTopBuyers(buyers)
@@ -68,8 +68,8 @@ export default function TopBuyers() {
               </div>
 
               {/* AVATAR */}
-              <div className="w-[44px] h-[44px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 flex items-center justify-center text-white font-bold">
-                {buyer.userName?.charAt(0) || 'U'}
+              <div className="w-[44px] h-[44px] rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold">
+                {buyer.userName?.charAt(0)?.toUpperCase() || "U"}
               </div>
 
               {/* USER INFO */}
@@ -100,7 +100,7 @@ export default function TopBuyers() {
                     fontWeight: 700
                   }}
                 >
-                  ₹{buyer.total.toFixed(2)}
+                  ₹{Number(buyer.total).toFixed(2)}
                 </div>
 
                 <div className="text-xs text-gray-500">

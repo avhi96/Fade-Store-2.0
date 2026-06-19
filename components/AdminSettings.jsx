@@ -100,9 +100,24 @@ export default function AdminSettings() {
   // Load settings
   useEffect(() => {
     getStoreSettings().then(data => {
-      setSettings(data || {})
+      setSettings({
+        taxRate: 0,
+        globalDiscount: 0,
+        announcement: '',
+        maintenanceMode: false,
+        maintenanceMessage: '',
+        welcomeMessage: '',
+        currency: '₹',
+        partners: [],
+        promoCodes: [],
+        redeemCodes: [],
+        ...(data || {})
+      })
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }).catch((err) => {
+      console.error(err)
+      setLoading(false)
+    })
   }, [])
 
   const updateSetting = useCallback((key, value) => {
@@ -113,7 +128,15 @@ export default function AdminSettings() {
   const addPartner = useCallback(() => {
     setSettings(prev => ({
       ...prev,
-      partners: [...(prev.partners || []), { name: '', tag: '', url: '' }]
+      partners: [
+        ...(prev.partners || []),
+        {
+          id: crypto.randomUUID(),
+          name: '',
+          tag: '',
+          url: ''
+        }
+      ]
     }))
   }, [])
 
@@ -134,10 +157,22 @@ export default function AdminSettings() {
 
   const handleSave = useCallback(async () => {
     setSaving(true)
-    setSaveStatus('')
-    const success = await updateStoreSettings(settings)
-    setSaving(false)
-    setSaveStatus(success ? 'Saved successfully!' : 'Failed to save.')
+    setSaveStatus("")
+
+    try {
+      const success = await updateStoreSettings(settings)
+
+      setSaveStatus(
+        success
+          ? "Saved successfully!"
+          : "Failed to save."
+      )
+    } catch (err) {
+      console.error(err)
+      setSaveStatus("Failed to save.")
+    } finally {
+      setSaving(false)
+    }
   }, [settings])
 
   if (loading) {
@@ -298,7 +333,7 @@ export default function AdminSettings() {
                     <div className="space-y-4">
                       {(settings.partners || []).map((partner, index) => (
                         <PartnerRow
-                          key={index}
+                          key={partner.id ?? index}
                           partner={partner}
                           index={index}
                           onUpdate={(field, value) => updatePartner(index, field, value)}
@@ -342,7 +377,7 @@ export default function AdminSettings() {
                       {(settings.promoCodes || []).map((promo, index) => (
 
                         <div
-                          key={index}
+                          key={promo.id ?? index}
                           className="p-4 rounded-xl bg-white/5 border border-white/10"
                         >
 
@@ -353,8 +388,13 @@ export default function AdminSettings() {
                               value={promo.code || ''}
                               onChange={(e) => {
                                 const updated = [...settings.promoCodes]
-                                updated[index].code = e.target.value.toUpperCase()
-                                updateSetting('promoCodes', updated)
+
+                                updated[index] = {
+                                  ...updated[index],
+                                  code: e.target.value.toUpperCase(),
+                                }
+
+                                updateSetting("promoCodes", updated)
                               }}
                             />
 
@@ -364,7 +404,12 @@ export default function AdminSettings() {
                               value={promo.discountValue || 0}
                               onChange={(e) => {
                                 const updated = [...settings.promoCodes]
-                                updated[index].discountValue = Number(e.target.value)
+
+                                updated[index] = {
+                                  ...updated[index],
+                                  discountValue: Number(e.target.value),
+                                }
+
                                 updateSetting('promoCodes', updated)
                               }}
                             />
@@ -373,7 +418,12 @@ export default function AdminSettings() {
                               value={promo.discountType || 'percentage'}
                               onChange={(e) => {
                                 const updated = [...settings.promoCodes]
-                                updated[index].discountType = e.target.value
+
+                                updated[index] = {
+                                  ...updated[index],
+                                  discountType: e.target.value,
+                                }
+
                                 updateSetting('promoCodes', updated)
                               }}
                               className="
@@ -422,7 +472,12 @@ export default function AdminSettings() {
                               value={promo.maxUses || 1}
                               onChange={(e) => {
                                 const updated = [...settings.promoCodes]
-                                updated[index].maxUses = Number(e.target.value)
+
+                                updated[index] = {
+                                  ...updated[index],
+                                  maxUses: Number(e.target.value),
+                                }
+
                                 updateSetting('promoCodes', updated)
                               }}
                             />
@@ -447,6 +502,7 @@ export default function AdminSettings() {
                           updateSetting('promoCodes', [
                             ...(settings.promoCodes || []),
                             {
+                              id: crypto.randomUUID(),
                               code: '',
                               discountType: 'percentage',
                               discountValue: 10,
@@ -484,7 +540,7 @@ export default function AdminSettings() {
                       {(settings.redeemCodes || []).map((code, index) => (
 
                         <div
-                          key={index}
+                          key={code.id ?? index}
                           className="p-4 rounded-xl bg-white/5 border border-white/10"
                         >
 
@@ -495,7 +551,12 @@ export default function AdminSettings() {
                               value={code.code || ''}
                               onChange={(e) => {
                                 const updated = [...settings.redeemCodes]
-                                updated[index].code = e.target.value.toUpperCase()
+
+                                updated[index] = {
+                                  ...updated[index],
+                                  code: e.target.value.toUpperCase(),
+                                }
+
                                 updateSetting('redeemCodes', updated)
                               }}
                             />
@@ -505,7 +566,10 @@ export default function AdminSettings() {
                               value={code.reward || ''}
                               onChange={(e) => {
                                 const updated = [...settings.redeemCodes]
-                                updated[index].reward = e.target.value
+                                updated[index] = {
+                                  ...updated[index],
+                                  reward: e.target.value,
+                                }
                                 updateSetting('redeemCodes', updated)
                               }}
                             />
@@ -515,7 +579,10 @@ export default function AdminSettings() {
                               value={code.command || ''}
                               onChange={(e) => {
                                 const updated = [...settings.redeemCodes]
-                                updated[index].command = e.target.value
+                                updated[index] = {
+                                  ...updated[index],
+                                  command: e.target.value,
+                                }
                                 updateSetting('redeemCodes', updated)
                               }}
                               placeholder="lp user {player} parent add vip"
@@ -527,7 +594,10 @@ export default function AdminSettings() {
                               value={code.maxUses || 1}
                               onChange={(e) => {
                                 const updated = [...settings.redeemCodes]
-                                updated[index].maxUses = Number(e.target.value)
+                                updated[index] = {
+                                  ...updated[index],
+                                  maxUses: Number(e.target.value),
+                                }
                                 updateSetting('redeemCodes', updated)
                               }}
                             />
@@ -552,6 +622,7 @@ export default function AdminSettings() {
                           updateSetting('redeemCodes', [
                             ...(settings.redeemCodes || []),
                             {
+                              id: crypto.randomUUID(),
                               code: '',
                               reward: '',
                               command: '',

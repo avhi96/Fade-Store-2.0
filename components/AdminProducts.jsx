@@ -389,9 +389,14 @@ export default function AdminProducts({ isAdmin }) {
           <p className='text-gray-500'>Get started by adding your first product</p>
         </div>
       ) : (
-        <div className='admin-product-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6 lg:gap-8'>
-          {filteredProducts.map(p => (
-            <StoreCard key={p.id} p={p} adminMode onEdit={openEdit} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
+          {filteredProducts.map((p) => (
+            <StoreCard
+              key={p.id}
+              p={p}
+              adminMode
+              onEdit={openEdit}
+            />
           ))}
         </div>
       )}
