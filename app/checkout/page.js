@@ -23,7 +23,8 @@ export default function Checkout() {
   const [cartChecked, setCartChecked] = useState(false)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState("razorpay")
+  // const [paymentMethod, setPaymentMethod] = useState("razorpay")
+  const [paymentMethod, setPaymentMethod] = useState("cashfree")
 
   const [mcName, setMcName] = useState("")
   const [email, setEmail] = useState("")
@@ -121,7 +122,7 @@ export default function Checkout() {
       document.head.appendChild(script)
     }
 
-    loadScript('https://checkout.razorpay.com/v1/checkout.js')
+    // loadScript('https://checkout.razorpay.com/v1/checkout.js')
     loadScript('https://sdk.cashfree.com/js/v3/cashfree.js')
   }, [])
 
@@ -243,7 +244,8 @@ export default function Checkout() {
     try {
       const orderId = `${session.user.id}-${Date.now()}`
 
-      const allowedMethods = ["razorpay", "cashfree"]
+      // const allowedMethods = ["razorpay", "cashfree"]
+      const allowedMethods = ["cashfree"]
 
       if (!allowedMethods.includes(paymentMethod)) {
         throw new Error("Invalid payment method")
@@ -617,7 +619,7 @@ useEffect(() => {
           {!cartIsMoneyOnly ? (
             <div className="space-y-3 mb-6">
               {[
-                "razorpay",
+                // "razorpay",
                 "cashfree"
               ].map((method) => (
                 <div
