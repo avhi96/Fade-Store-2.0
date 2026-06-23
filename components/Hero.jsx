@@ -70,8 +70,8 @@ export default function Hero() {
         style={{ animation: "fadeDown 0.8s 0.4s ease both" }}
       >
         {[
-          { num: "12K+", label: "Players" },
-          { num: "98K", label: "Orders" },
+          { num: "300+", label: "Players" },
+          { num: "100+", label: "Orders" },
           { num: "4.9★", label: "Rating" },
           { num: "24/7", label: "Support" },
         ].map((s, i) => (

@@ -37,7 +37,7 @@ export default function Navbar() {
           className="font-[var(--font-display)] font-extrabold text-[1.2rem] md:text-[1.4rem] tracking-[0.15em] cursor-default 
           bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent"
         >
-          FADE<span className="text-yellow-400">.</span>STORE
+          FADE<span className="text-yellow-400">.</span>ZEN
         </div>
 
         {/* DESKTOP NAV */}
