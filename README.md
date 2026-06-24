@@ -24,21 +24,40 @@ store-2.0
 │  │           └─ page.js
 │  ├─ api
 │  │  ├─ admin
+│  │  │  ├─ delivery
+│  │  │  │  └─ retry
+│  │  │  │     └─ route.js
 │  │  │  ├─ orders
+│  │  │  │  ├─ delete
+│  │  │  │  │  └─ route.js
 │  │  │  │  └─ route.js
 │  │  │  ├─ products
 │  │  │  │  ├─ delete
 │  │  │  │  │  └─ route.js
 │  │  │  │  └─ save
 │  │  │  │     └─ route.js
+│  │  │  ├─ servers
+│  │  │  │  ├─ delete
+│  │  │  │  │  └─ route.js
+│  │  │  │  ├─ page.jsx
+│  │  │  │  └─ save
+│  │  │  │     └─ route.js
 │  │  │  ├─ settings
 │  │  │  │  └─ route.js
+│  │  │  ├─ updates
+│  │  │  │  ├─ delete
+│  │  │  │  │  └─ route.js
+│  │  │  │  └─ save
+│  │  │  │     └─ route.js
 │  │  │  └─ users
 │  │  │     ├─ delete
 │  │  │     │  └─ route.js
 │  │  │     └─ route.jsx
 │  │  ├─ auth
 │  │  │  └─ [...nextauth]
+│  │  │     └─ route.js
+│  │  ├─ delivery
+│  │  │  └─ process
 │  │  │     └─ route.js
 │  │  ├─ maintenance-status
 │  │  │  └─ route.js
@@ -68,6 +87,8 @@ store-2.0
 │  │  │     ├─ route.js
 │  │  │     └─ validate
 │  │  │        └─ route.js
+│  │  ├─ top-buyers
+│  │  │  └─ route.js
 │  │  ├─ upload
 │  │  ├─ user-status
 │  │  │  └─ route.js
@@ -89,6 +110,13 @@ store-2.0
 │  │  └─ page.js
 │  ├─ globals.css
 │  ├─ layout.js
+│  ├─ legal
+│  │  ├─ privacy
+│  │  │  └─ page.jsx
+│  │  ├─ refund
+│  │  │  └─ page.jsx
+│  │  └─ terms
+│  │     └─ page.jsx
 │  ├─ loading.js
 │  ├─ login
 │  │  └─ page.js
@@ -156,18 +184,22 @@ store-2.0
 │  ├─ auth.js
 │  ├─ client-users.js
 │  ├─ data.js
+│  ├─ delivery.js
 │  ├─ fadePoints.js
 │  ├─ firebase-admin.js
 │  ├─ firebase.js
 │  ├─ orders.js
 │  ├─ products.js
 │  ├─ productType.js
+│  ├─ pterodactyl.js
 │  ├─ rateLimit.js
 │  ├─ serverPayments.js
 │  ├─ settings-server.js
 │  ├─ settings.js
+│  ├─ top-buyers.js
 │  ├─ types.js
 │  ├─ updates.js
+│  ├─ user-purchases.js
 │  └─ users.js
 ├─ next.config.mjs
 ├─ package-lock.json
@@ -175,6 +207,9 @@ store-2.0
 ├─ postcss.config.mjs
 ├─ proxy.js
 ├─ public
+│  └─ fadeicon.png
+├─ README.md
+├─ server
 └─ tailwind.config.js
 
 ```

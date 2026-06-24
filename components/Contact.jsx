@@ -11,7 +11,7 @@ import Dropdown from "./Dropdown"
 
 export default function Contact() {
     const [topic, setTopic] = useState("")
-    
+
     return (
         <section className="max-w-[1200px] mx-auto px-6 py-20">
             {/* 🔥 HERO TITLE */}
@@ -145,7 +145,7 @@ export default function Contact() {
                         />
 
                         {/* SELECT */}
-                        <Dropdown 
+                        <Dropdown
                             options={[
                                 { value: 'support', label: 'Support' },
                                 { value: 'purchase', label: 'Purchase Issue' },
@@ -171,6 +171,61 @@ export default function Contact() {
                     </form>
                 </div>
 
+                {/* Contact Info + Copyright */}
+            </div> {/* End Grid */}
+
+            {/* Contact Info */}
+            <div className="mt-16 max-w-3xl rounded-2xl bg-transparent backdrop-blur-xl p-4">
+
+                <h3
+                    className="text-white text-2xl font-bold mb-8"
+                    style={{ fontFamily: "Orbitron, monospace" }}
+                >
+                    Contact Information
+                </h3>
+
+                <div className="space-y-6 text-gray-300">
+
+                    <div className="flex items-start">
+                        <span className="w-28 text-cyan-400 font-semibold">
+                            Owner
+                        </span>
+                        <span>Ankit Kumar</span>
+                    </div>
+
+                    <div className="flex items-start">
+                        <span className="w-28 text-cyan-400 font-semibold">
+                            Email
+                        </span>
+
+                        <a
+                            href="mailto:fade013@mail.io"
+                            className="hover:text-cyan-300 transition"
+                        >
+                            fadezen@mail.io
+                        </a>
+                    </div>
+
+                    <div className="flex items-start">
+                        <span className="w-28 text-cyan-400 font-semibold">
+                            Address
+                        </span>
+
+                        <span>
+                            Dehri On Sone<br />
+                            Rohtas , Bihar, India
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+            {/* Copyright */}
+            <div className="mt-10 border-t border-white/10 pt-6 text-center">
+                <p className="text-sm text-gray-500">
+                    © {new Date().getFullYear()} FadeZen. All rights reserved.
+                </p>
             </div>
 
         </section>

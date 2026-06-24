@@ -53,13 +53,15 @@ export default function AdminProducts({ isAdmin }) {
     pointsCost: 0,
     inGameMoneyAmount: 0,
     redemptionDescription: '',
-    deliveryCommands: '', // stored as textarea; we convert to array on submit
+    commands: '', // stored as textarea; we convert to array on submit
 
     badge: '',
     color: '#63b3ed',
     perks: '',
     details: '',
-    imageUrl: ''
+    imageUrl: '',
+    server: 'default',
+
   })
 
   const previewP = useMemo(() => {
@@ -72,7 +74,7 @@ export default function AdminProducts({ isAdmin }) {
         pointsCost: Number(formData.pointsCost),
         inGameMoneyAmount: Number(formData.inGameMoneyAmount),
         redemptionDescription: formData.redemptionDescription,
-        deliveryCommands: formData.deliveryCommands,
+        commands: formData.commands,
 
         perks: parsePerks(formData.perks),
         color: formData.color,
@@ -166,13 +168,14 @@ export default function AdminProducts({ isAdmin }) {
       pointsCost: 0,
       inGameMoneyAmount: 0,
       redemptionDescription: '',
-      deliveryCommands: '',
+      commands: '',
 
       badge: '',
       color: '#63b3ed',
       perks: '',
       details: '',
-      imageUrl: ''
+      imageUrl: '',
+      server: 'default',
     })
     setShowModal(true)
   }
@@ -196,12 +199,13 @@ export default function AdminProducts({ isAdmin }) {
       pointsCost: typeof p.pointsCost === 'number' ? p.pointsCost : 0,
       inGameMoneyAmount: typeof p.inGameMoneyAmount === 'number' ? p.inGameMoneyAmount : 0,
       redemptionDescription: p.redemptionDescription || '',
-      deliveryCommands: Array.isArray(p.deliveryCommands) ? p.deliveryCommands.join('\n') : (typeof p.deliveryCommands === 'string' ? p.deliveryCommands : ''),
+      commands: Array.isArray(p.commands) ? p.commands.join('\n') : (typeof p.commands === 'string' ? p.commands : ''),
       badge: p.badge || '',
       color: p.color || '#63b3ed',
       perks: Array.isArray(p.perks) ? p.perks.join('\n') : (typeof p.perks === 'string' ? p.perks : ''),
       details: p.details || '',
-      imageUrl: p.imageUrl || ''
+      imageUrl: p.imageUrl || '',
+      server: p.server || 'default',
     })
     setShowModal(true)
   }
@@ -219,10 +223,16 @@ export default function AdminProducts({ isAdmin }) {
       const safePointsCost = Number(formData.pointsCost)
       const safeInGameMoneyAmount = Number(formData.inGameMoneyAmount)
 
-      const deliveryCommandsArr = String(formData.deliveryCommands)
+      const commandsArr = String(formData.commands)
         .split(/\r?\n/)
         .map((s) => s.trim())
         .filter(Boolean)
+
+      if (commandsArr.some(cmd => cmd.length > 500)) {
+        alert("One of the commands is too long.")
+        setSubmitting(false)
+        return
+      }
 
       const isMoney = formData.cat === 'money'
 
@@ -231,6 +241,7 @@ export default function AdminProducts({ isAdmin }) {
         imageUrl: formData.imageUrl || '',
         perks: parsePerks(formData.perks),
         details: formData.details || '',
+        server: formData.server || 'default',
 
         // Keep existing fields untouched for non-money products
         price: isMoney ? null : Number(formData.price),
@@ -240,7 +251,7 @@ export default function AdminProducts({ isAdmin }) {
         pointsCost: isMoney ? (Number.isFinite(safePointsCost) ? Math.floor(safePointsCost) : 0) : null,
         inGameMoneyAmount: isMoney ? (Number.isFinite(safeInGameMoneyAmount) ? Math.floor(safeInGameMoneyAmount) : 0) : null,
         redemptionDescription: isMoney ? String(formData.redemptionDescription || '') : '',
-        deliveryCommands: isMoney ? deliveryCommandsArr : [],
+        commands: commandsArr,
       }
 
       const response = await fetch(
@@ -550,19 +561,6 @@ export default function AdminProducts({ isAdmin }) {
                           onChange={(e) => setFormData({ ...formData, redemptionDescription: e.target.value })}
                         />
                       </div>
-
-                      <div>
-                        <label className='text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block'>
-                          Delivery Commands (optional)
-                        </label>
-                        <textarea
-                          className='w-full px-4 py-3 min-h-[90px] max-h-[180px] rounded-lg bg-white/[0.04] border border-white/10 text-white resize-vertical'
-                          placeholder={'One command per line.\nExample:\n/giveMoney %PLAYER% 250000\n'}
-                          value={formData.deliveryCommands}
-                          onChange={(e) => setFormData({ ...formData, deliveryCommands: e.target.value })}
-                        />
-                        <p className='text-[11px] text-gray-500 mt-1'>Only saved/validated server-side as safe characters.</p>
-                      </div>
                     </div>
                   ) : (
                     <div>
@@ -606,7 +604,51 @@ export default function AdminProducts({ isAdmin }) {
                   )}
                 </div>
 
+                <div>
+                  <label className="text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block">
+                    Minecraft Server
+                  </label>
 
+                  <select
+                    className="w-full px-4 py-3 rounded-lg bg-black border border-white/10 text-white"
+                    value={formData.server}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        server: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="default">Default Server</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs uppercase tracking-[0.1em] text-gray-400 mb-2 block">
+                    Console Commands
+                  </label>
+
+                  <textarea
+                    className="w-full px-4 py-3 min-h-[120px] rounded-lg bg-white/[0.04] border border-white/10 text-white resize-y"
+                    placeholder={`One command per line
+
+lp user {player} parent add assassin
+crate key give {player} vote 5
+eco give {player} 250000
+broadcast &6{player} purchased Assassin!`}
+                    value={formData.commands}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        commands: e.target.value,
+                      })
+                    }
+                  />
+
+                  <p className="text-xs text-gray-500 mt-2">
+                    These commands will run after a successful purchase.
+                  </p>
+                </div>
 
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>
